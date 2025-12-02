@@ -23,3 +23,9 @@ export const staticBuddies = [
     distanceKm: 15
   }
 ];
+
+// Diese Funktion wird von src/routes/buddies/[id]/+page.js benutzt
+export function getBuddyById(id) {
+  // aktuell: einfach in der Demo-Liste suchen
+  return staticBuddies.find((buddy) => buddy.id === id) ?? null;
+}
