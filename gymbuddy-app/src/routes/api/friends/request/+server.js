@@ -1,56 +1,42 @@
-// src/routes/api/friends/request/+server.js
 import { json } from "@sveltejs/kit";
-import { getDb } from "$lib/server/mongo.js";
-import { ObjectId } from "mongodb";
+import { getDb } from "$lib/server/mongo";
 
 export async function POST({ request }) {
-  const { fromUserId, toUserId } = await request.json();
+  const { userId, targetId } = await request.json();
 
-  if (!fromUserId || !toUserId) {
-    return json({ error: "fromUserId oder toUserId fehlt." }, { status: 400 });
-  }
-
-  const from = new ObjectId(fromUserId);
-  const to = new ObjectId(toUserId);
-
-  if (from.equals(to)) {
-    return json({ error: "Man kann sich nicht selbst anfragen." }, { status: 400 });
+  if (!userId || !targetId || userId === targetId) {
+    return json({ error: "invalid ids" }, { status: 400 });
   }
 
   const db = await getDb();
-  const friendships = db.collection("friendships");
+  const users = db.collection("users");
 
-  const [userId1, userId2] = [from, to].sort((a, b) =>
-    a.toString().localeCompare(b.toString())
-  );
+  const [me, target] = await Promise.all([
+    users.findOne({ _id: userId }),
+    users.findOne({ _id: targetId }),
+  ]);
 
-  const existing = await friendships.findOne({ userId1, userId2 });
+  if (!me || !target) return json({ error: "user not found" }, { status: 404 });
 
-  if (!existing) {
-    await friendships.insertOne({
-      userId1,
-      userId2,
-      status: "pending",
-      requesterId: from,
-      createdAt: new Date()
-    });
-    return json({ success: true, status: "pending" });
+  const alreadyFriends = (me.friends ?? []).includes(targetId);
+  const alreadyOut = (me.friendRequestsOut ?? []).includes(targetId);
+  const alreadyIn = (me.friendRequestsIn ?? []).includes(targetId);
+
+  if (alreadyFriends || alreadyOut || alreadyIn) {
+  
+    return json({ ok: true, status: "unchanged" });
   }
 
-  if (existing.status === "accepted") {
-    return json({ success: true, status: "friends" });
-  }
+  await Promise.all([
+    users.updateOne(
+      { _id: userId },
+      { $addToSet: { friendRequestsOut: targetId } }
+    ),
+    users.updateOne(
+      { _id: targetId },
+      { $addToSet: { friendRequestsIn: userId } }
+    ),
+  ]);
 
-  if (existing.status === "pending") {
-    if (!existing.requesterId.equals(from)) {
-      await friendships.updateOne(
-        { _id: existing._id },
-        { $set: { status: "accepted" } }
-      );
-      return json({ success: true, status: "friends" });
-    }
-    return json({ success: true, status: "pending" });
-  }
-
-  return json({ success: true });
+  return json({ ok: true });
 }

@@ -1,26 +1,26 @@
-// src/routes/api/friends/decline/+server.js
 import { json } from "@sveltejs/kit";
-import { getDb } from "$lib/server/mongo.js";
-import { ObjectId } from "mongodb";
+import { getDb } from "$lib/server/mongo";
 
 export async function POST({ request }) {
-  const { currentUserId, otherUserId } = await request.json();
+  const { userId, fromId } = await request.json();
 
-  if (!currentUserId || !otherUserId) {
-    return json({ error: "currentUserId oder otherUserId fehlt." }, { status: 400 });
+  if (!userId || !fromId) {
+    return json({ error: "invalid ids" }, { status: 400 });
   }
 
-  const current = new ObjectId(currentUserId);
-  const other = new ObjectId(otherUserId);
-
   const db = await getDb();
-  const friendships = db.collection("friendships");
+  const users = db.collection("users");
 
-  const [userId1, userId2] = [current, other].sort((a, b) =>
-    a.toString().localeCompare(b.toString())
-  );
+  await Promise.all([
+    users.updateOne(
+      { _id: userId },
+      { $pull: { friendRequestsIn: fromId } }
+    ),
+    users.updateOne(
+      { _id: fromId },
+      { $pull: { friendRequestsOut: userId } }
+    ),
+  ]);
 
-  await friendships.deleteOne({ userId1, userId2, status: "pending" });
-
-  return json({ success: true });
+  return json({ ok: true });
 }

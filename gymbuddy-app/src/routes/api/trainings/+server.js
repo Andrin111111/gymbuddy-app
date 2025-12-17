@@ -1,52 +1,75 @@
-// src/routes/api/trainings/+server.js
+
 import { json } from "@sveltejs/kit";
-import { getDb } from "$lib/server/mongo.js";
+import { getDb } from "$lib/server/mongo";
+import {
+  XP_PER_TRAINING_ALONE,
+  XP_PER_TRAINING_WITH_BUDDY,
+} from "$lib/gamification.js";
 
-export async function GET() {
+
+export async function GET({ url }) {
+  const userId = url.searchParams.get("userId");
+  if (!userId) return json({ error: "userId missing" }, { status: 400 });
+
   const db = await getDb();
+  const trainings = db.collection("trainings");
+  const users = db.collection("users");
 
-  const trainings = await db
-    .collection("trainings")
-    .find({})
-    .sort({ date: -1, createdAt: -1 })
+  const list = await trainings
+    .find({ userId })
+    .sort({ date: -1 })
     .toArray();
 
-  // _id in String umwandeln
-  const mapped = trainings.map((t) => ({
-    id: t._id.toString(),
-    date: t.date,
-    withBuddy: !!t.withBuddy,
-    buddyName: t.buddyName || "",
-    notes: t.notes || ""
-  }));
+  const user = await users.findOne({ _id: userId });
 
-  return json(mapped);
+  return json({
+    trainings: list,
+    xp: user?.xp ?? 0,
+    trainingsCount: user?.trainingsCount ?? list.length,
+  });
 }
 
-export async function POST({ request }) {
-  const body = await request.json();
-  const { date, withBuddy, buddyName, notes } = body;
 
-  if (!date) {
-    return json({ error: "Datum fehlt." }, { status: 400 });
+export async function POST({ request }) {
+  const data = await request.json();
+  const { userId, date, notes, withBuddy } = data;
+
+  if (!userId || !date) {
+    return json({ error: "userId and date required" }, { status: 400 });
   }
 
-  const doc = {
+  const db = await getDb();
+  const trainings = db.collection("trainings");
+  const users = db.collection("users");
+
+  const xpGain = withBuddy
+    ? XP_PER_TRAINING_WITH_BUDDY
+    : XP_PER_TRAINING_ALONE;
+
+  const trainingDoc = {
+    userId,
     date,
+    notes: notes ?? "",
     withBuddy: !!withBuddy,
-    buddyName: withBuddy ? (buddyName || "") : "",
-    notes: notes || "",
-    createdAt: new Date()
+    xpGain,
+    createdAt: new Date(),
   };
 
-  const db = await getDb();
-  const result = await db.collection("trainings").insertOne(doc);
+  await trainings.insertOne(trainingDoc);
 
-  return json(
+  const { value: updatedUser } = await users.findOneAndUpdate(
+    { _id: userId },
     {
-      id: result.insertedId.toString(),
-      ...doc
+      $inc: { xp: xpGain, trainingsCount: 1 },
+      $setOnInsert: { xp: 0, trainingsCount: 0 },
     },
-    { status: 201 }
+    { upsert: true, returnDocument: "after" }
   );
+
+  return json({
+    ok: true,
+    training: trainingDoc,
+    xp: updatedUser?.xp ?? xpGain,
+    trainingsCount: updatedUser?.trainingsCount ?? 1,
+  });
 }

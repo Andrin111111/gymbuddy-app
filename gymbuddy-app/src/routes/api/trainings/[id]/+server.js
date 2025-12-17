@@ -1,17 +1,42 @@
-// src/routes/api/trainings/[id]/+server.js
+
 import { json } from "@sveltejs/kit";
+import { getDb } from "$lib/server/mongo";
 import { ObjectId } from "mongodb";
-import { getDb } from "$lib/server/mongo.js";
 
-export async function DELETE({ params }) {
-  const { id } = params;
+export async function DELETE({ params, url }) {
+  const id = params.id;
+  const userId = url.searchParams.get("userId");
 
-  try {
-    const db = await getDb();
-    await db.collection("trainings").deleteOne({ _id: new ObjectId(id) });
-    return json({ success: true });
-  } catch (err) {
-    console.error("Fehler beim Löschen eines Trainings:", err);
-    return json({ error: "Löschen fehlgeschlagen." }, { status: 500 });
+  if (!id || !userId) {
+    return json({ error: "id and userId required" }, { status: 400 });
   }
+
+  const db = await getDb();
+  const trainings = db.collection("trainings");
+  const users = db.collection("users");
+
+  const training = await trainings.findOne({
+    _id: new ObjectId(id),
+    userId,
+  });
+
+  if (!training) return json({ error: "Training not found" }, { status: 404 });
+
+  await trainings.deleteOne({ _id: training._id });
+
+  const xpToSubtract = training.xpGain ?? 0;
+
+  const { value: updatedUser } = await users.findOneAndUpdate(
+    { _id: userId },
+    {
+      $inc: { xp: -xpToSubtract, trainingsCount: -1 },
+    },
+    { returnDocument: "after" }
+  );
+
+  return json({
+    ok: true,
+    xp: updatedUser?.xp ?? 0,
+    trainingsCount: updatedUser?.trainingsCount ?? 0,
+  });
 }

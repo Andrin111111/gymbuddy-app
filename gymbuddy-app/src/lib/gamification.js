@@ -1,26 +1,17 @@
-export function calculateUserStats(trainings, profile) {
-  const list = Array.isArray(trainings) ? trainings : [];
 
-  const soloCount = list.filter((t) => !t.withBuddy).length;
-  const buddyCount = list.filter((t) => t.withBuddy).length;
+export const XP_PER_TRAINING_ALONE = 10;
+export const XP_PER_TRAINING_WITH_BUDDY = 20;
+export const XP_PROFILE_BONUS = 30;
 
-  let xp = soloCount * 10 + buddyCount * 20;
 
-  const profileCompleted =
+export function isProfileComplete(profile) {
+  return (
     profile &&
     profile.name &&
     profile.gym &&
-    profile.level;
-
-  if (profileCompleted) {
-    xp += 30;
-  }
-
-  let level = 1;
-  if (xp >= 50 && xp < 150) level = 2;
-  else if (xp >= 150 && xp < 300) level = 3;
-  else if (xp >= 300 && xp < 600) level = 4;
-  else if (xp >= 600) level = 5;
-
-  return { soloCount, buddyCount, xp, level };
+    profile.level &&
+    profile.goals &&
+    profile.preferredTimes &&
+    profile.contact
+  );
 }

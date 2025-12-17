@@ -2,9 +2,9 @@ import { json } from "@sveltejs/kit";
 import { getDb } from "$lib/server/mongo";
 
 export async function POST({ request }) {
-  const { userId, fromId } = await request.json();
+  const { userId, targetId } = await request.json();
 
-  if (!userId || !fromId) {
+  if (!userId || !targetId) {
     return json({ error: "invalid ids" }, { status: 400 });
   }
 
@@ -14,20 +14,13 @@ export async function POST({ request }) {
   await Promise.all([
     users.updateOne(
       { _id: userId },
-      {
-        $pull: { friendRequestsIn: fromId },
-        $addToSet: { friends: fromId },
-      }
+      { $pull: { friendRequestsOut: targetId } }
     ),
     users.updateOne(
-      { _id: fromId },
-      {
-        $pull: { friendRequestsOut: userId },
-        $addToSet: { friends: userId },
-      }
+      { _id: targetId },
+      { $pull: { friendRequestsIn: userId } }
     ),
   ]);
 
   return json({ ok: true });
 }
-

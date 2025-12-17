@@ -1,79 +1,103 @@
 // src/routes/api/profile/+server.js
 import { json } from "@sveltejs/kit";
-import { getDb } from "$lib/server/mongo.js";
-import { ObjectId } from "mongodb";
+import { getDb } from "$lib/server/mongo";
+import { isProfileComplete, XP_PROFILE_BONUS } from "$lib/gamification.js";
 
-async function generateUniqueCode(db) {
-  while (true) {
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const existing = await db.collection("users").findOne({ "profile.code": code });
-    if (!existing) return code;
-  }
-}
-
+/**
+ * GET /api/profile?userId=...
+ * Liefert Profil + XP + Trainingsanzahl.
+ */
 export async function GET({ url }) {
   const userId = url.searchParams.get("userId");
-  if (!userId) {
-    return json({ error: "userId fehlt." }, { status: 400 });
-  }
-
-  const db = await getDb();
-  const user = await db
-    .collection("users")
-    .findOne({ _id: new ObjectId(userId) }, { projection: { password: 0 } });
-
-  if (!user) {
-    return json({ error: "Benutzer nicht gefunden." }, { status: 404 });
-  }
-
-  return json({
-    userId: user._id.toString(),
-    email: user.email,
-    profile: user.profile
-  });
-}
-
-export async function PUT({ request }) {
-  const { userId, profileUpdates } = await request.json();
-
-  if (!userId || !profileUpdates) {
-    return json({ error: "userId oder profileUpdates fehlt." }, { status: 400 });
-  }
+  if (!userId) return json({ error: "userId missing" }, { status: 400 });
 
   const db = await getDb();
   const users = db.collection("users");
-  const _id = new ObjectId(userId);
 
-  const user = await users.findOne({ _id });
-  if (!user) {
-    return json({ error: "Benutzer nicht gefunden." }, { status: 404 });
-  }
+  const user = await users.findOne(
+    { _id: userId },
+    { projection: { passwordHash: 0 } }
+  );
 
-  let profile = user.profile || {};
-  if (!profile.code) {
-    profile.code = await generateUniqueCode(db);
-  }
+  if (!user) return json({ error: "User not found" }, { status: 404 });
 
-  // GymBuddy-ID NICHT änderbar
-  const updatedProfile = {
-    ...profile,
-    name: profileUpdates.name ?? profile.name ?? "",
-    gym: profileUpdates.gym ?? profile.gym ?? "",
-    level: profileUpdates.level ?? profile.level ?? "beginner",
-    goals: profileUpdates.goals ?? profile.goals ?? "",
-    trainingTimes: profileUpdates.trainingTimes ?? profile.trainingTimes ?? "",
-    contact: profileUpdates.contact ?? profile.contact ?? "",
-    code: profile.code
+  return json({
+    profile: {
+      name: user.name ?? "",
+      gym: user.gym ?? "",
+      level: user.level ?? "",
+      goals: user.goals ?? "",
+      preferredTimes: user.preferredTimes ?? "",
+      contact: user.contact ?? "",
+      gymBuddyId: user.gymBuddyId,
+    },
+    xp: user.xp ?? 0,
+    trainingsCount: user.trainingsCount ?? 0,
+    profileBonusApplied: user.profileBonusApplied === true,
+  });
+}
+
+/**
+ * POST /api/profile
+ * Body: { userId, profile }
+ * Speichert das Profil. Wenn das Profil zum ersten Mal vollständig ist:
+ * +30 XP und Flag "profileBonusApplied = true".
+ */
+export async function POST({ request }) {
+  const data = await request.json();
+  const { userId, profile } = data;
+
+  if (!userId) return json({ error: "userId missing" }, { status: 400 });
+
+  const db = await getDb();
+  const users = db.collection("users");
+
+  // Bisherigen User laden
+  const existingUser = await users.findOne({ _id: userId });
+  if (!existingUser) return json({ error: "User not found" }, { status: 404 });
+
+  // Neues Profil simulieren (altes Userobjekt + neue Felder)
+  const mergedProfile = {
+    ...existingUser,
+    name: profile.name ?? "",
+    gym: profile.gym ?? "",
+    level: profile.level ?? "",
+    goals: profile.goals ?? "",
+    preferredTimes: profile.preferredTimes ?? "",
+    contact: profile.contact ?? "",
   };
 
-  await users.updateOne(
-    { _id },
-    { $set: { profile: updatedProfile } }
+  const nowComplete = isProfileComplete(mergedProfile);
+
+  const update = {
+    $set: {
+      name: mergedProfile.name,
+      gym: mergedProfile.gym,
+      level: mergedProfile.level,
+      goals: mergedProfile.goals,
+      preferredTimes: mergedProfile.preferredTimes,
+      contact: mergedProfile.contact,
+    },
+  };
+
+  // Bonus, wenn:
+  // - Profil jetzt vollständig
+  // - und bisher noch keine Bonus-XP gewährt
+  if (nowComplete && existingUser.profileBonusApplied !== true) {
+    update.$inc = { xp: XP_PROFILE_BONUS };
+    update.$set.profileBonusApplied = true;
+  }
+
+  const { value: updatedUser } = await users.findOneAndUpdate(
+    { _id: userId },
+    update,
+    { returnDocument: "after" }
   );
 
   return json({
-    userId,
-    email: user.email,
-    profile: updatedProfile
+    ok: true,
+    xp: updatedUser?.xp ?? 0,
+    trainingsCount: updatedUser?.trainingsCount ?? 0,
+    profileBonusApplied: updatedUser?.profileBonusApplied === true,
   });
 }
