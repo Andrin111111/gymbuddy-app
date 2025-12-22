@@ -1,25 +1,30 @@
-// src/routes/api/auth/delete/+server.js
+// src/routes/api/auth/delet/+server.js
 import { json } from "@sveltejs/kit";
-import { getDb } from "$lib/server/mongo.js";
 import { ObjectId } from "mongodb";
+import { getDb } from "$lib/server/mongo";
 
 export async function POST({ request }) {
-  const { userId } = await request.json();
-  if (!userId) {
-    return json({ error: "userId fehlt." }, { status: 400 });
+  try {
+    const body = await request.json();
+    const userId = String(body?.userId ?? "").trim();
+    if (!userId) return json({ error: "userId fehlt." }, { status: 400 });
+
+    const db = await getDb();
+    const users = db.collection("users");
+    const trainings = db.collection("trainings");
+    const friendships = db.collection("friendships");
+
+    const _id = new ObjectId(userId);
+
+    await Promise.all([
+      users.deleteOne({ _id }),
+      trainings.deleteMany({ userId }),
+      friendships.deleteMany({ $or: [{ fromUserId: userId }, { toUserId: userId }] })
+    ]);
+
+    return json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    return json({ error: "Account löschen fehlgeschlagen." }, { status: 500 });
   }
-
-  const db = await getDb();
-  const users = db.collection("users");
-  const friendships = db.collection("friendships");
-
-  const _id = new ObjectId(userId);
-
-  await users.deleteOne({ _id });
-
-  await friendships.deleteMany({
-    $or: [{ userId1: _id }, { userId2: _id }]
-  });
-
-  return json({ success: true });
 }

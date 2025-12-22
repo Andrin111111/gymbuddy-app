@@ -1,62 +1,66 @@
 // src/routes/api/auth/register/+server.js
 import { json } from "@sveltejs/kit";
-import { getDb } from "$lib/server/mongo.js";
-
-async function generateUniqueCode(db) {
-  while (true) {
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const existing = await db.collection("users").findOne({ "profile.code": code });
-    if (!existing) return code;
-  }
-}
+import { getDb } from "$lib/server/mongo";
+import { hashPassword } from "$lib/server/security";
+import { randomBuddyCode } from "$lib/server/ids";
 
 export async function POST({ request }) {
-  const { email, password } = await request.json();
+  try {
+    const body = await request.json();
+    const email = String(body?.email ?? "").trim().toLowerCase();
+    const password = String(body?.password ?? "");
 
-  if (!email || !password) {
-    return json({ error: "E-Mail und Passwort sind erforderlich." }, { status: 400 });
-  }
+    if (!email || !password) {
+      return json({ error: "E-Mail und Passwort sind erforderlich." }, { status: 400 });
+    }
 
-  if (password.length < 8) {
-    return json({ error: "Passwort muss mindestens 8 Zeichen lang sein." }, { status: 400 });
-  }
+    const db = await getDb();
+    const users = db.collection("users");
 
-  const db = await getDb();
-  const users = db.collection("users");
+    const existing = await users.findOne({ email });
+    if (existing) {
+      return json({ error: "Diese E-Mail ist bereits registriert." }, { status: 409 });
+    }
 
-  const existing = await users.findOne({ email: email.toLowerCase() });
-  if (existing) {
-    return json(
-      { error: "Für diese E-Mail existiert bereits ein Konto. Bitte melde dich an." },
-      { status: 400 }
-    );
-  }
+    // Buddy-Code eindeutig machen
+    let buddyCode = randomBuddyCode();
+    for (let i = 0; i < 10; i += 1) {
+      const taken = await users.findOne({ buddyCode });
+      if (!taken) break;
+      buddyCode = randomBuddyCode();
+    }
 
-  const code = await generateUniqueCode(db);
+    const pw = hashPassword(password);
 
-  const userDoc = {
-    email: email.toLowerCase(),
-    password, // Prototyp: im Klartext, in echt: hashen
-    profile: {
+    const doc = {
+      email,
+      password: pw,
+      buddyCode,
+
+      // Profilfelder
       name: "",
       gym: "",
-      level: "beginner",
+      trainingLevel: "",
       goals: "",
-      trainingTimes: "",
+      preferredTimes: "",
       contact: "",
-      code
-    },
-    createdAt: new Date()
-  };
 
-  const result = await users.insertOne(userDoc);
+      // Gamification
+      profileBonusGranted: false,
 
-  return json(
-    {
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const result = await users.insertOne(doc);
+
+    return json({
       userId: result.insertedId.toString(),
-      email: userDoc.email,
-      profile: userDoc.profile
-    },
-    { status: 201 }
-  );
+      email,
+      buddyCode
+    });
+  } catch (err) {
+    console.error(err);
+    return json({ error: "Registrierung fehlgeschlagen." }, { status: 500 });
+  }
 }
