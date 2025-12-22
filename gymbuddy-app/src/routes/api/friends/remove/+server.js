@@ -1,26 +1,46 @@
 // src/routes/api/friends/remove/+server.js
 import { json } from "@sveltejs/kit";
-import { getDb } from "$lib/server/mongo.js";
 import { ObjectId } from "mongodb";
+import { getDb } from "$lib/server/mongo.js";
+
+function toObjectId(id) {
+  try {
+    return new ObjectId(String(id));
+  } catch {
+    return null;
+  }
+}
 
 export async function POST({ request }) {
-  const { currentUserId, otherUserId } = await request.json();
+  const body = await request.json();
+
+  const currentUserId = body?.currentUserId ?? body?.userId ?? "";
+  const otherUserId = body?.otherUserId ?? body?.targetId ?? "";
 
   if (!currentUserId || !otherUserId) {
-    return json({ error: "currentUserId oder otherUserId fehlt." }, { status: 400 });
+    return json({ error: "invalid ids" }, { status: 400 });
   }
 
-  const current = new ObjectId(currentUserId);
-  const other = new ObjectId(otherUserId);
+  const curObj = toObjectId(currentUserId);
+  const otherObj = toObjectId(otherUserId);
+  if (!curObj || !otherObj) return json({ error: "invalid ids" }, { status: 400 });
+
+  const curStr = curObj.toString();
+  const otherStr = otherObj.toString();
 
   const db = await getDb();
-  const friendships = db.collection("friendships");
+  const users = db.collection("users");
 
-  const [userId1, userId2] = [current, other].sort((a, b) =>
-    a.toString().localeCompare(b.toString())
-  );
+  await Promise.all([
+    users.updateOne(
+      { _id: curObj },
+      { $pull: { friends: otherStr, friendRequestsIn: otherStr, friendRequestsOut: otherStr } }
+    ),
+    users.updateOne(
+      { _id: otherObj },
+      { $pull: { friends: curStr, friendRequestsIn: curStr, friendRequestsOut: curStr } }
+    )
+  ]);
 
-  await friendships.deleteOne({ userId1, userId2 });
-
-  return json({ success: true });
+  return json({ ok: true });
 }

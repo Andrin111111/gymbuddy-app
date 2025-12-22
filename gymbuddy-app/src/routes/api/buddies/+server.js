@@ -1,13 +1,11 @@
 // src/routes/api/buddies/+server.js
-// Liefert alle GymBuddies aus MongoDB inkl. Beziehungsstatus
-
 import { json } from "@sveltejs/kit";
 import { ObjectId } from "mongodb";
 import { getDb } from "$lib/server/mongo.js";
 
 function toObjectIdOrNull(id) {
   try {
-    return new ObjectId(id);
+    return new ObjectId(String(id));
   } catch {
     return null;
   }
@@ -26,16 +24,18 @@ function pseudoDistanceKm(seed) {
   return n + 1;
 }
 
-function normalizeProfile(profile) {
-  const p = profile || {};
+function normalizeProfileFromUser(u) {
+  const p = u?.profile ?? {};
+  const code = safeString(p.code ?? u?.buddyCode ?? u?.gymBuddyId ?? "");
+
   return {
-    name: safeString(p.name),
-    gym: safeString(p.gym),
-    level: p.level ?? "",
-    goals: safeString(p.goals),
-    trainingTimes: safeString(p.trainingTimes ?? p.preferredTimes),
-    contact: safeString(p.contact),
-    code: safeString(p.code)
+    name: safeString(p.name ?? u?.name),
+    gym: safeString(p.gym ?? u?.gym),
+    level: safeString(p.level ?? u?.level ?? u?.trainingLevel ?? "beginner"),
+    goals: safeString(p.goals ?? u?.goals),
+    trainingTimes: safeString(p.trainingTimes ?? u?.trainingTimes ?? u?.preferredTimes),
+    contact: safeString(p.contact ?? u?.contact),
+    code
   };
 }
 
@@ -47,13 +47,12 @@ export async function GET({ url }) {
   const users = db.collection("users");
 
   const meObjectId = toObjectIdOrNull(userId);
+  if (!meObjectId) return json({ error: "invalid userId" }, { status: 400 });
 
-  let me = meObjectId ? await users.findOne({ _id: meObjectId }) : null;
-  if (!me) me = await users.findOne({ _id: userId });
-
+  const me = await users.findOne({ _id: meObjectId });
   if (!me) return json({ error: "User nicht gefunden" }, { status: 404 });
 
-  const myIdStr = me._id?.toString?.() ?? String(me._id);
+  const myIdStr = me._id.toString();
   const myFriends = Array.isArray(me.friends) ? me.friends : [];
   const myIn = Array.isArray(me.friendRequestsIn) ? me.friendRequestsIn : [];
   const myOut = Array.isArray(me.friendRequestsOut) ? me.friendRequestsOut : [];
@@ -65,6 +64,16 @@ export async function GET({ url }) {
         projection: {
           email: 1,
           profile: 1,
+          buddyCode: 1,
+          gymBuddyId: 1,
+          name: 1,
+          gym: 1,
+          level: 1,
+          trainingLevel: 1,
+          goals: 1,
+          trainingTimes: 1,
+          preferredTimes: 1,
+          contact: 1,
           xp: 1,
           trainingsCount: 1
         }
@@ -73,8 +82,8 @@ export async function GET({ url }) {
     .toArray();
 
   const buddies = allUsers.map((u) => {
-    const id = u._id?.toString?.() ?? String(u._id);
-    const p = normalizeProfile(u.profile);
+    const id = u._id.toString();
+    const p = normalizeProfileFromUser(u);
 
     const isSelf = id === myIdStr;
     let relationship = "none";

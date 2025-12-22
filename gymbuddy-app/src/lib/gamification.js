@@ -1,18 +1,14 @@
 // src/lib/gamification.js
-// Zentrale Gamification-Logik (XP, Level, Bonus-Regeln)
 
 export const XP_PROFILE_COMPLETE_BONUS = 30;
-// Backwards-compatible Alias (wird in einigen Endpoints importiert)
 export const XP_PROFILE_BONUS = XP_PROFILE_COMPLETE_BONUS;
 
 export const XP_TRAINING_SOLO = 10;
 export const XP_TRAINING_WITH_BUDDY = 20;
 
-// Backwards-compatible Aliases (ältere Namensvarianten aus dem Projekt)
 export const XP_PER_TRAINING_ALONE = XP_TRAINING_SOLO;
 export const XP_PER_TRAINING_WITH_BUDDY = XP_TRAINING_WITH_BUDDY;
 
-// Sehr einfache Level-Formel: alle 100 XP ein Level-Up
 export function calculateLevel(xp) {
   const safeXp = Number.isFinite(Number(xp)) ? Number(xp) : 0;
   return Math.max(1, Math.floor(safeXp / 100) + 1);
@@ -21,46 +17,40 @@ export function calculateLevel(xp) {
 export function isProfileComplete(profile) {
   if (!profile) return false;
 
-  const required = ["name", "gym", "trainingLevel", "goals", "preferredTimes", "contact"];
-  return required.every((key) => String(profile[key] ?? "").trim().length > 0);
+  const name = String(profile.name ?? "").trim();
+  const gym = String(profile.gym ?? "").trim();
+
+  const level = String(profile.level ?? profile.trainingLevel ?? "").trim();
+  const goals = String(profile.goals ?? "").trim();
+  const times = String(profile.trainingTimes ?? profile.preferredTimes ?? "").trim();
+  const contact = String(profile.contact ?? "").trim();
+
+  return !!(name && gym && level && goals && times && contact);
 }
 
-/**
- * Berechnet XP + Level aus Trainings + Profil.
- *
- * Signatur passt zu deinem Frontend:
- *   calculateUserStats(trainings, profile, options)
- *
- * trainings: Array von Trainingsobjekten. Falls ein Training das Feld xpAwarded hat, wird das verwendet.
- *            Sonst wird mit withBuddy -> 20 oder ohne -> 10 gerechnet.
- *
- * options.profileBonusGranted:
- *   - true: Bonus ist bereits vergeben, wird immer addiert, auch wenn Profil später wieder unvollständig wird
- *   - false: Bonus wird nur addiert, wenn Profil aktuell vollständig ist
- *
- * options.baseXp:
- *   - Falls du XP bereits in der DB persistierst und nur noch Level rechnen willst,
- *     kannst du baseXp übergeben. Standard ist 0, dann wird XP komplett berechnet.
- */
 export function calculateUserStats(trainings = [], profile = {}, options = {}) {
   const list = Array.isArray(trainings) ? trainings : [];
-
   const { profileBonusGranted = false, baseXp = 0 } = options ?? {};
 
+  let soloCount = 0;
+  let buddyCount = 0;
+
   const trainingsXp = list.reduce((sum, t) => {
-    const xpAwarded = Number(t?.xpAwarded);
+    const withBuddy = !!t?.withBuddy;
+    if (withBuddy) buddyCount += 1;
+    else soloCount += 1;
+
+    const xpAwarded = Number(t?.xpAwarded ?? t?.xpGain);
     if (Number.isFinite(xpAwarded)) return sum + xpAwarded;
 
-    return sum + (t?.withBuddy ? XP_TRAINING_WITH_BUDDY : XP_TRAINING_SOLO);
+    return sum + (withBuddy ? XP_TRAINING_WITH_BUDDY : XP_TRAINING_SOLO);
   }, 0);
 
   const profileComplete = isProfileComplete(profile);
 
   const profileXp = profileBonusGranted
     ? XP_PROFILE_COMPLETE_BONUS
-    : profileComplete
-      ? XP_PROFILE_COMPLETE_BONUS
-      : 0;
+    : (profileComplete ? XP_PROFILE_COMPLETE_BONUS : 0);
 
   const totalXp = Math.max(0, Number(baseXp) + trainingsXp + profileXp);
   const level = calculateLevel(totalXp);
@@ -69,6 +59,8 @@ export function calculateUserStats(trainings = [], profile = {}, options = {}) {
     xp: totalXp,
     level,
     trainingsCount: list.length,
+    soloCount,
+    buddyCount,
     profileComplete
   };
 }
