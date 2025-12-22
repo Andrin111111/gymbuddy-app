@@ -1,13 +1,14 @@
 // svelte.config.js
-import adapter from '@sveltejs/adapter-auto';
+import adapter from '@sveltejs/adapter-netlify';
 
 const config = {
   kit: {
-    adapter: adapter(),
+    adapter: adapter({
+      // Standard (Node-based) Netlify Functions
+      edge: false
+    }),
     alias: {
       $lib: 'src/lib'
-      // hier könntest du später weitere Aliase ergänzen, z.B.
-      // $components: 'src/components'
     }
   }
 };

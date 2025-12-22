@@ -2,8 +2,15 @@
 // Zentrale Gamification-Logik (XP, Level, Bonus-Regeln)
 
 export const XP_PROFILE_COMPLETE_BONUS = 30;
+// Backwards-compatible Alias (wird in einigen Endpoints importiert)
+export const XP_PROFILE_BONUS = XP_PROFILE_COMPLETE_BONUS;
+
 export const XP_TRAINING_SOLO = 10;
 export const XP_TRAINING_WITH_BUDDY = 20;
+
+// Backwards-compatible Aliases (ältere Namensvarianten aus dem Projekt)
+export const XP_PER_TRAINING_ALONE = XP_TRAINING_SOLO;
+export const XP_PER_TRAINING_WITH_BUDDY = XP_TRAINING_WITH_BUDDY;
 
 // Sehr einfache Level-Formel: alle 100 XP ein Level-Up
 export function calculateLevel(xp) {
@@ -38,10 +45,7 @@ export function isProfileComplete(profile) {
 export function calculateUserStats(trainings = [], profile = {}, options = {}) {
   const list = Array.isArray(trainings) ? trainings : [];
 
-  const {
-    profileBonusGranted = false,
-    baseXp = 0
-  } = options ?? {};
+  const { profileBonusGranted = false, baseXp = 0 } = options ?? {};
 
   const trainingsXp = list.reduce((sum, t) => {
     const xpAwarded = Number(t?.xpAwarded);
@@ -54,7 +58,9 @@ export function calculateUserStats(trainings = [], profile = {}, options = {}) {
 
   const profileXp = profileBonusGranted
     ? XP_PROFILE_COMPLETE_BONUS
-    : (profileComplete ? XP_PROFILE_COMPLETE_BONUS : 0);
+    : profileComplete
+      ? XP_PROFILE_COMPLETE_BONUS
+      : 0;
 
   const totalXp = Math.max(0, Number(baseXp) + trainingsXp + profileXp);
   const level = calculateLevel(totalXp);
@@ -66,4 +72,3 @@ export function calculateUserStats(trainings = [], profile = {}, options = {}) {
     profileComplete
   };
 }
-
