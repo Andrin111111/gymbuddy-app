@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { staticBuddies } from "$lib/buddies";
 
-  const SESSION_KEY = "gymbuddy-session";
+  const SESSION_KEY = "GYMBUDDY-ATH";
 
   let isAuthenticated = $state(false);
   let session = $state({ userId: "", email: "" });
@@ -12,11 +12,11 @@
   let idSearch = $state("");
   let distanceFilter = $state("");
 
-  let buddies = $state([]); // echte + demos
+  let buddies = $state([]);
   let error = $state("");
 
-  let demoFriends = $state([]); // IDs der Demo-Buddies, mit denen man "befreundet" ist
-  let selectedBuddy = $state(null); // für "Profil ansehen"
+  let demoFriends = $state([]);
+  let selectedBuddy = $state(null);
 
   onMount(async () => {
     const s = localStorage.getItem(SESSION_KEY);
@@ -80,14 +80,13 @@
       const gymLower = (b.gym || "").toLowerCase();
       const matchesGym = gyms.length === 0 || gyms.some((g) => gymLower.includes(g));
 
-      const matchesLevel = !levelFilter || levelFilter === "Alle" || b.level === levelFilter;
+      const matchesLevel = !levelFilter || b.level === levelFilter;
 
       const matchesId =
         !idSearch || String(b.code || b.gymBuddyId || b.buddyCode || "").includes(idSearch);
 
       const matchesDistance =
-        !maxDistance ||
-        (b.distanceKm != null && b.distanceKm <= maxDistance);
+        !maxDistance || (b.distanceKm != null && b.distanceKm <= maxDistance);
 
       return matchesGym && matchesLevel && matchesId && matchesDistance;
     });
@@ -205,9 +204,7 @@
 
   async function removeFriend(buddy) {
     if (buddy.isDemo) {
-      demoFriends =
-        demoFriends.filter((id) => id !== buddy.id);
-
+      demoFriends = demoFriends.filter((id) => id !== buddy.id);
       await loadBuddies();
       return;
     }
@@ -263,8 +260,9 @@
 
     <div class="row g-3 mb-4">
       <div class="col-md-6">
-        <label class="form-label">Nach Gym filtern</label>
+        <label class="form-label" for="gymFilterInput">Nach Gym filtern</label>
         <input
+          id="gymFilterInput"
           class="form-control"
           placeholder="z.B. Activ, Fitnesspark"
           bind:value={gymFilter}
@@ -273,8 +271,8 @@
       </div>
 
       <div class="col-md-6">
-        <label class="form-label">Nach Level filtern</label>
-        <select class="form-select" bind:value={levelFilter}>
+        <label class="form-label" for="levelFilterSelect">Nach Level filtern</label>
+        <select id="levelFilterSelect" class="form-select" bind:value={levelFilter}>
           <option value="">Alle</option>
           <option value="beginner">beginner</option>
           <option value="intermediate">intermediate</option>
@@ -283,8 +281,9 @@
       </div>
 
       <div class="col-md-6">
-        <label class="form-label">Nach GymBuddy ID suchen</label>
+        <label class="form-label" for="buddyIdSearchInput">Nach GymBuddy ID suchen</label>
         <input
+          id="buddyIdSearchInput"
           class="form-control"
           placeholder="z.B. 734821"
           bind:value={idSearch}
@@ -292,8 +291,9 @@
       </div>
 
       <div class="col-md-6">
-        <label class="form-label">Maximale Distanz (km)</label>
+        <label class="form-label" for="distanceFilterInput">Maximale Distanz (km)</label>
         <input
+          id="distanceFilterInput"
           class="form-control"
           placeholder="z.B. 5"
           bind:value={distanceFilter}
@@ -379,7 +379,7 @@
                     class="btn btn-success btn-sm"
                     onclick={() => removeFriend(b)}
                   >
-                    Verbunden – Verbindung lösen
+                    Verbunden, Verbindung lösen
                   </button>
                 {:else if b.relationship === "outgoing"}
                   <button

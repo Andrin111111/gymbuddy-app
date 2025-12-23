@@ -1,6 +1,5 @@
-export function randomBuddyCode() {
-  return String(Math.floor(100000 + Math.random() * 900000));
-}
+// src/lib/server/ids.js
+
 export function randomBuddyCode() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
