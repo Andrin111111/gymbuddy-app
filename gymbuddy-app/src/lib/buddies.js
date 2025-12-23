@@ -4,8 +4,8 @@ export const staticBuddies = [
     id: "demo1",
     name: "Lena",
     gym: "Activ Fitness Winterthur",
-    level: 3,
-    focus: "Powerlifting",
+    level: "intermediate",
+    goals: "Powerlifting",
     trainingTimes: "Mo, Mi, Fr ab 18:00",
     contact: "@lena-lifts",
     code: "111111",
@@ -15,8 +15,8 @@ export const staticBuddies = [
     id: "demo2",
     name: "Markus",
     gym: "Fitnesspark Zürich",
-    level: 2,
-    focus: "Muskelaufbau",
+    level: "beginner",
+    goals: "Muskelaufbau",
     trainingTimes: "Di, Do 19:00",
     contact: "@markus-gym",
     code: "222222",
@@ -24,8 +24,6 @@ export const staticBuddies = [
   }
 ];
 
-// Diese Funktion wird von src/routes/buddies/[id]/+page.js benutzt
 export function getBuddyById(id) {
-  // aktuell: einfach in der Demo-Liste suchen
   return staticBuddies.find((buddy) => buddy.id === id) ?? null;
 }

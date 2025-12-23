@@ -1,23 +1,26 @@
 // src/lib/server/mongo.js
 import { MongoClient } from "mongodb";
-import { MONGODB_URI } from "$env/static/private";
+import { env } from "$env/dynamic/private";
 
-if (!MONGODB_URI) {
-  throw new Error("MONGODB_URI ist nicht gesetzt. Bitte in der .env-Datei konfigurieren.");
-}
-
-const client = new MongoClient(MONGODB_URI);
-
+let client;
 let db;
 
-/**
- * Liefert eine wiederverwendbare MongoDB-Connection.
- */
 export async function getDb() {
+  const uri = env.MONGODB_URI;
+  if (!uri) {
+    throw new Error(
+      "MONGODB_URI ist nicht gesetzt. Bitte als Netlify Environment Variable konfigurieren."
+    );
+  }
+
+  if (!client) {
+    client = new MongoClient(uri);
+  }
+
   if (!db) {
     await client.connect();
-    // Wenn im URI eine DB angegeben ist (…/gymbuddy), wird diese verwendet
     db = client.db();
   }
+
   return db;
 }

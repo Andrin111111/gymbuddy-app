@@ -2,27 +2,31 @@
   import "../styles.css";
   import { onMount } from "svelte";
 
-  const SESSION_KEY = "gymbuddy-session";
+  import { readSession, clearSession } from "$lib/session.js";
 
   let { children } = $props();
   let isAuthenticated = $state(false);
 
+  function refreshAuth() {
+    const s = readSession();
+    isAuthenticated = !!s?.userId;
+  }
+
   onMount(() => {
-    const sessionJson = localStorage.getItem(SESSION_KEY);
-    if (sessionJson) {
-      try {
-        const session = JSON.parse(sessionJson);
-        isAuthenticated = !!session.userId;
-      } catch {
-        isAuthenticated = false;
-      }
-    } else {
-      isAuthenticated = false;
-    }
+    refreshAuth();
+
+    const onChanged = () => refreshAuth();
+    window.addEventListener("gymbuddy-session-changed", onChanged);
+    window.addEventListener("storage", onChanged);
+
+    return () => {
+      window.removeEventListener("gymbuddy-session-changed", onChanged);
+      window.removeEventListener("storage", onChanged);
+    };
   });
 
   function logout() {
-    localStorage.removeItem(SESSION_KEY);
+    clearSession();
     isAuthenticated = false;
     window.location.href = "/profile";
   }
@@ -31,16 +35,8 @@
 <div class="container py-3">
   <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4 rounded shadow-sm">
     <div class="container-fluid">
-      <a
-        class="navbar-brand d-flex align-items-center"
-        href="/"
-      >
-        <img
-          src="/img1.png"
-          alt="GymBuddy Logo"
-          width="96"
-          height="96"
-        />
+      <a class="navbar-brand d-flex align-items-center" href="/">
+        <img src="/img1.png" alt="GymBuddy Logo" width="96" height="96" />
       </a>
 
       <button
@@ -75,20 +71,13 @@
 
           {#if isAuthenticated}
             <li class="nav-item">
-              <button
-                type="button"
-                class="btn btn-outline-danger btn-sm ms-2"
-                onclick={logout}
-              >
+              <button type="button" class="btn btn-outline-danger btn-sm ms-2" onclick={logout}>
                 Abmelden
               </button>
             </li>
           {:else}
             <li class="nav-item">
-              <a
-                class="btn btn-primary btn-sm ms-2"
-                href="/profile"
-              >
+              <a class="btn btn-primary btn-sm ms-2" href="/profile">
                 Anmelden
               </a>
             </li>
