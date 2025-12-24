@@ -1,52 +1,120 @@
-import { browser } from "$app/environment";
+// src/lib/session.js
 
+// Einheitlicher Session-Key (bitte überall verwenden)
 export const SESSION_KEY = "GYMBUDDY-ATH";
 
-function safeParse(json) {
+// Alte Keys (falls du vorher andere Keys hattest) automatisch migrieren
+const LEGACY_KEYS = [
+  "gymbuddy-session",
+  "gymbuddy-auth",
+  "gymbuddy-session-key",
+  "gymbuddy-session-v1"
+];
+
+function safeParse(jsonStr) {
   try {
-    return JSON.parse(json);
+    return JSON.parse(jsonStr);
   } catch {
     return null;
   }
 }
 
+function isValidSession(s) {
+  return !!(
+    s &&
+    typeof s === "object" &&
+    typeof s.userId === "string" &&
+    s.userId.trim().length > 0
+  );
+}
+
+function notifySessionChanged() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("gymbuddy-session-changed"));
+}
+
+function migrateLegacySession() {
+  if (typeof window === "undefined") return null;
+
+  const current = safeParse(window.localStorage.getItem(SESSION_KEY));
+  if (isValidSession(current)) return current;
+
+  for (const key of LEGACY_KEYS) {
+    const legacyParsed = safeParse(window.localStorage.getItem(key));
+    if (isValidSession(legacyParsed)) {
+      try {
+        window.localStorage.setItem(SESSION_KEY, JSON.stringify(legacyParsed));
+      } catch {}
+
+      for (const k of LEGACY_KEYS) {
+        try {
+          window.localStorage.removeItem(k);
+        } catch {}
+      }
+
+      notifySessionChanged();
+      return legacyParsed;
+    }
+  }
+
+  return null;
+}
+
 export function readSession() {
-  if (!browser) return null;
-  const raw = localStorage.getItem(SESSION_KEY);
-  if (!raw) return null;
+  if (typeof window === "undefined") return null;
+
+  const migrated = migrateLegacySession();
+  if (isValidSession(migrated)) return migrated;
+
+  const raw = window.localStorage.getItem(SESSION_KEY);
   const parsed = safeParse(raw);
-  if (!parsed || typeof parsed !== "object") return null;
-  if (!parsed.userId) return null;
-  return parsed;
+  return isValidSession(parsed) ? parsed : null;
 }
 
 export function writeSession(session) {
-  if (!browser) return;
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  window.dispatchEvent(new Event("gymbuddy-session-changed"));
+  if (typeof window === "undefined") return;
+
+  if (!isValidSession(session)) {
+    clearSession();
+    return;
+  }
+
+  window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  notifySessionChanged();
 }
 
 export function clearSession() {
-  if (!browser) return;
-  localStorage.removeItem(SESSION_KEY);
-  window.dispatchEvent(new Event("gymbuddy-session-changed"));
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.removeItem(SESSION_KEY);
+  } catch {}
+
+  notifySessionChanged();
 }
 
-export function onSessionChange(callback) {
-  if (!browser) return () => {};
+/**
+ * Für Pages: callback sofort + bei Login/Logout updaten
+ */
+export function subscribeSession(callback) {
+  if (typeof window === "undefined") return () => {};
 
-  const handler = (e) => {
-    if (e?.type === "storage") {
-      if (e.key && e.key !== SESSION_KEY) return;
+  const emit = () => callback(readSession());
+
+  const onCustom = () => emit();
+  const onStorage = (e) => {
+    if (!e || e.key === null || e.key === SESSION_KEY || LEGACY_KEYS.includes(e.key)) {
+      emit();
     }
-    callback(readSession());
   };
 
-  window.addEventListener("storage", handler);
-  window.addEventListener("gymbuddy-session-changed", handler);
+  window.addEventListener("gymbuddy-session-changed", onCustom);
+  window.addEventListener("storage", onStorage);
+
+  emit();
 
   return () => {
-    window.removeEventListener("storage", handler);
-    window.removeEventListener("gymbuddy-session-changed", handler);
+    window.removeEventListener("gymbuddy-session-changed", onCustom);
+    window.removeEventListener("storage", onStorage);
   };
 }

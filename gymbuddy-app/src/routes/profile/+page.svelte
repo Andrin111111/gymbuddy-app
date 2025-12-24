@@ -1,232 +1,161 @@
 <script>
   import { onMount } from "svelte";
+  import { readSession, writeSession, clearSession, subscribeSession } from "$lib/session.js";
 
-  const SESSION_KEY = "gymbuddy-session";
+  let session = $state(readSession());
+  let isAuthenticated = $derived(!!session?.userId);
 
-  let mode = $state("register"); // 'register' | 'login' | 'profile'
+  let mode = $state("login");
+  let loading = $state(false);
+  let error = $state("");
 
-  let session = $state({ userId: "", email: "" });
+  let email = $state("");
+  let password = $state("");
+  let password2 = $state("");
 
-  let registerForm = $state({
-    email: "",
-    password: "",
-    confirmPassword: ""
-  });
+  let buddyCode = $state("");
+  let name = $state("");
+  let gym = $state("");
+  let trainingLevel = $state("beginner");
+  let goals = $state("");
+  let preferredTimes = $state("");
+  let contact = $state("");
 
-  let loginForm = $state({
-    email: "",
-    password: ""
-  });
+  let xp = $state(0);
+  let level = $state(1);
+  let trainingsCount = $state(0);
+  let profileBonusApplied = $state(false);
 
-  let profile = $state({
-    name: "",
-    gym: "",
-    level: "beginner",
-    goals: "",
-    trainingTimes: "",
-    contact: "",
-    code: ""
-  });
-
-  let authError = $state("");
-  let passwordError = $state("");
-  let saved = $state(false);
-  let loadingProfile = $state(false);
-  let deleting = $state(false);
-
-  let showLoginPassword = $state(false);
-  let showRegisterPassword = $state(false);
-  let showRegisterPassword2 = $state(false);
-
-  function validatePassword(pw) {
-    if (pw.length < 8) {
-      return "Passwort muss mindestens 8 Zeichen lang sein.";
-    }
-    if (!/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) {
-      return "Passwort braucht mindestens einen Buchstaben und eine Zahl.";
-    }
-    if (/\s/.test(pw)) {
-      return "Passwort darf keine Leerzeichen enthalten.";
-    }
-    return "";
+  function setError(msg) {
+    error = msg || "";
   }
 
   async function loadProfile() {
-    if (!session.userId) return;
-    loadingProfile = true;
-    authError = "";
-
+    if (!session?.userId) return;
+    setError("");
+    loading = true;
     try {
-      const res = await fetch(`/api/profile?userId=${session.userId}`);
-      if (!res.ok) {
-        throw new Error("Profil konnte nicht geladen werden.");
-      }
+      const res = await fetch(`/api/profile?userId=${encodeURIComponent(session.userId)}`);
       const data = await res.json();
-      profile = data.profile || profile;
-    } catch (err) {
-      console.error(err);
-      authError = err.message || "Fehler beim Laden des Profils.";
+      if (!res.ok) throw new Error(data?.error || "Profil konnte nicht geladen werden.");
+
+      buddyCode = data?.buddyCode ?? "";
+      name = data?.name ?? "";
+      gym = data?.gym ?? "";
+      trainingLevel = data?.trainingLevel ?? "beginner";
+      goals = data?.goals ?? "";
+      preferredTimes = data?.preferredTimes ?? "";
+      contact = data?.contact ?? "";
+
+      xp = data?.xp ?? 0;
+      level = data?.level ?? 1;
+      trainingsCount = data?.trainingsCount ?? 0;
+      profileBonusApplied = !!data?.profileBonusApplied;
+    } catch (e) {
+      setError(e?.message || "Profil konnte nicht geladen werden.");
     } finally {
-      loadingProfile = false;
+      loading = false;
     }
   }
 
-  onMount(() => {
-    const s = localStorage.getItem(SESSION_KEY);
-    if (s) {
-      try {
-        const parsed = JSON.parse(s);
-        if (parsed.userId && parsed.email) {
-          session = parsed;
-          mode = "profile";
-          loadProfile();
-          return;
-        }
-      } catch {
-        // ignore
-      }
-    }
-    mode = "register";
-  });
+  async function doRegister() {
+    setError("");
 
-  async function handleRegister(event) {
-    event.preventDefault();
-    authError = "";
-    passwordError = "";
+    if (!email.trim() || !password) return setError("Bitte E-Mail und Passwort ausfüllen.");
+    if (password.length < 6) return setError("Passwort muss mindestens 6 Zeichen haben.");
+    if (password !== password2) return setError("Passwörter stimmen nicht überein.");
 
-    const email = registerForm.email.trim().toLowerCase();
-
-    if (!email) {
-      authError = "Bitte E-Mail eingeben.";
-      return;
-    }
-
-    const pwError = validatePassword(registerForm.password);
-    if (pwError) {
-      passwordError = pwError;
-      return;
-    }
-
-    if (registerForm.password !== registerForm.confirmPassword) {
-      passwordError = "Passwörter stimmen nicht überein.";
-      return;
-    }
-
+    loading = true;
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          password: registerForm.password
-        })
+        body: JSON.stringify({ email: email.trim(), password })
       });
 
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Registrierung fehlgeschlagen.");
-      }
+      if (!res.ok) throw new Error(data?.error || "Registrierung fehlgeschlagen.");
 
-      session = { userId: data.userId, email: data.email };
-      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-      profile = data.profile;
+      writeSession({ userId: data.userId, email: data.email, buddyCode: data.buddyCode });
+      session = readSession();
       mode = "profile";
-      window.location.href = "/profile";
-    } catch (err) {
-      console.error(err);
-      authError = err.message || "Fehler bei der Registrierung.";
+      await loadProfile();
+    } catch (e) {
+      setError(e?.message || "Registrierung fehlgeschlagen.");
+    } finally {
+      loading = false;
     }
   }
 
-  async function handleLogin(event) {
-    event.preventDefault();
-    authError = "";
-    passwordError = "";
+  async function doLogin() {
+    setError("");
 
-    const email = loginForm.email.trim().toLowerCase();
-    if (!email) {
-      authError = "Bitte E-Mail eingeben.";
-      return;
-    }
+    if (!email.trim() || !password) return setError("Bitte E-Mail und Passwort ausfüllen.");
 
+    loading = true;
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          password: loginForm.password
-        })
+        body: JSON.stringify({ email: email.trim(), password })
       });
 
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Login fehlgeschlagen.");
-      }
+      if (!res.ok) throw new Error(data?.error || "Login fehlgeschlagen.");
 
-      session = { userId: data.userId, email: data.email };
-      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-      profile = data.profile;
+      writeSession({ userId: data.userId, email: data.email, buddyCode: data.buddyCode });
+      session = readSession();
       mode = "profile";
-      window.location.href = "/profile";
-    } catch (err) {
-      console.error(err);
-      authError = err.message || "Fehler beim Login.";
+      await loadProfile();
+    } catch (e) {
+      setError(e?.message || "Login fehlgeschlagen.");
+    } finally {
+      loading = false;
     }
   }
 
-  async function handleProfileSubmit(event) {
-    event.preventDefault();
-    authError = "";
+  async function saveProfile() {
+    if (!session?.userId) return;
 
-    if (!session.userId) {
-      authError = "Keine aktive Sitzung. Bitte erneut anmelden.";
-      mode = "login";
-      return;
-    }
-
+    setError("");
+    loading = true;
     try {
       const res = await fetch("/api/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: session.userId,
-          profileUpdates: {
-            name: profile.name,
-            gym: profile.gym,
-            level: profile.level,
-            goals: profile.goals,
-            trainingTimes: profile.trainingTimes,
-            contact: profile.contact
-          }
+          name,
+          gym,
+          trainingLevel,
+          goals,
+          preferredTimes,
+          contact
         })
       });
 
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Profil konnte nicht gespeichert werden.");
-      }
+      if (!res.ok) throw new Error(data?.error || "Profil konnte nicht gespeichert werden.");
 
-      profile = data.profile;
-      saved = true;
-      setTimeout(() => {
-        saved = false;
-      }, 2000);
-    } catch (err) {
-      console.error(err);
-      authError = err.message || "Fehler beim Speichern des Profils.";
+      xp = data?.xp ?? xp;
+      level = data?.level ?? level;
+      trainingsCount = data?.trainingsCount ?? trainingsCount;
+      profileBonusApplied = !!data?.profileBonusApplied;
+    } catch (e) {
+      setError(e?.message || "Profil konnte nicht gespeichert werden.");
+    } finally {
+      loading = false;
     }
   }
 
   async function deleteAccount() {
-    if (!session.userId) return;
-    if (!confirm("Möchtest du deinen Account wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.")) {
-      return;
-    }
+    if (!session?.userId) return;
 
-    deleting = true;
-    authError = "";
+    const ok = confirm("Account wirklich löschen?");
+    if (!ok) return;
 
+    setError("");
+    loading = true;
     try {
       const res = await fetch("/api/auth/delete", {
         method: "POST",
@@ -235,304 +164,150 @@
       });
 
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Account konnte nicht gelöscht werden.");
-      }
+      if (!res.ok) throw new Error(data?.error || "Account konnte nicht gelöscht werden.");
 
-      localStorage.removeItem(SESSION_KEY);
-      session = { userId: "", email: "" };
-      profile = {
-        name: "",
-        gym: "",
-        level: "beginner",
-        goals: "",
-        trainingTimes: "",
-        contact: "",
-        code: ""
-      };
-      mode = "register";
-      window.location.href = "/profile";
-    } catch (err) {
-      console.error(err);
-      authError = err.message || "Fehler beim Löschen des Accounts.";
+      clearSession();
+      session = readSession();
+      mode = "login";
+    } catch (e) {
+      setError(e?.message || "Account konnte nicht gelöscht werden.");
     } finally {
-      deleting = false;
+      loading = false;
     }
   }
+
+  onMount(() => {
+    const unsubscribe = subscribeSession((s) => {
+      session = s;
+      if (s?.userId) {
+        mode = "profile";
+        loadProfile();
+      } else {
+        mode = "login";
+      }
+    });
+
+    if (session?.userId) {
+      mode = "profile";
+      loadProfile();
+    }
+
+    return unsubscribe;
+  });
 </script>
 
-<h1>Mein GymBuddy-Profil</h1>
+<div class="container py-4">
+  <h1 class="mb-1">Mein GymBuddy-Profil</h1>
 
-{#if mode === "register"}
-  <div class="mt-3">
-    <h2 class="h5">Konto erstellen</h2>
-    <p class="text-muted">
-      Lege einmalig ein Konto mit E-Mail und Passwort an. Danach meldest du dich
-      immer mit diesen Daten an.
-    </p>
+  {#if isAuthenticated}
+    <div class="text-muted mb-4">
+      Angemeldet als <strong>{session?.email}</strong>
+      {#if buddyCode}
+        <span class="ms-3">ID: <strong>{buddyCode}</strong></span>
+      {/if}
+    </div>
+  {/if}
 
-    <form class="mt-2" onsubmit={handleRegister}>
-      <div class="mb-3">
-        <label class="form-label" for="regEmail">E-Mail</label>
-        <input
-          id="regEmail"
-          type="email"
-          class="form-control"
-          bind:value={registerForm.email}
-          required
-        />
-      </div>
+  {#if error}
+    <div class="alert alert-danger">{error}</div>
+  {/if}
 
-      <div class="mb-3">
-        <label class="form-label" for="regPassword">Passwort</label>
-        <div class="input-group">
-          <input
-            id="regPassword"
-            type={showRegisterPassword ? "text" : "password"}
-            class="form-control"
-            bind:value={registerForm.password}
-            required
-          />
+  {#if loading}
+    <div class="alert alert-info">Lade...</div>
+  {/if}
+
+  {#if !isAuthenticated}
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="d-flex gap-2 mb-3">
           <button
+            class={"btn " + (mode === "login" ? "btn-primary" : "btn-outline-primary")}
             type="button"
-            class="btn btn-outline-secondary"
-            onclick={() => (showRegisterPassword = !showRegisterPassword)}
+            onclick={() => (mode = "login")}
           >
-            {showRegisterPassword ? "Verbergen" : "Anzeigen"}
+            Login
+          </button>
+          <button
+            class={"btn " + (mode === "register" ? "btn-primary" : "btn-outline-primary")}
+            type="button"
+            onclick={() => (mode = "register")}
+          >
+            Registrieren
           </button>
         </div>
-        <div class="form-text">
-          Mindestens 8 Zeichen, mindestens ein Buchstabe und eine Zahl, keine Leerzeichen.
-        </div>
-      </div>
 
-      <div class="mb-3">
-        <label class="form-label" for="regPassword2">Passwort wiederholen</label>
-        <div class="input-group">
-          <input
-            id="regPassword2"
-            type={showRegisterPassword2 ? "text" : "password"}
-            class="form-control"
-            bind:value={registerForm.confirmPassword}
-            required
-          />
-          <button
-            type="button"
-            class="btn btn-outline-secondary"
-            onclick={() => (showRegisterPassword2 = !showRegisterPassword2)}
-          >
-            {showRegisterPassword2 ? "Verbergen" : "Anzeigen"}
+        <div class="mb-3">
+          <label class="form-label" for="email">E-Mail</label>
+          <input id="email" class="form-control" type="email" bind:value={email} />
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label" for="pw">Passwort</label>
+          <input id="pw" class="form-control" type="password" bind:value={password} />
+        </div>
+
+        {#if mode === "register"}
+          <div class="mb-3">
+            <label class="form-label" for="pw2">Passwort wiederholen</label>
+            <input id="pw2" class="form-control" type="password" bind:value={password2} />
+          </div>
+
+          <button class="btn btn-success" type="button" onclick={doRegister} disabled={loading}>
+            Account erstellen
           </button>
-        </div>
-      </div>
-
-      {#if passwordError}
-        <div class="alert alert-danger py-2">{passwordError}</div>
-      {/if}
-
-      {#if authError}
-        <div class="alert alert-danger py-2">{authError}</div>
-      {/if}
-
-      <button type="submit" class="btn btn-primary">
-        Konto erstellen
-      </button>
-
-      <button
-        type="button"
-        class="btn btn-link"
-        onclick={() => {
-          mode = "login";
-          authError = "";
-          passwordError = "";
-        }}
-      >
-        Ich habe bereits ein Konto
-      </button>
-    </form>
-  </div>
-{:else if mode === "login"}
-  <div class="mt-3">
-    <h2 class="h5">Anmelden</h2>
-    <p class="text-muted">
-      Melde dich mit deiner registrierten E-Mail und deinem Passwort an.
-    </p>
-
-    <form class="mt-2" onsubmit={handleLogin}>
-      <div class="mb-3">
-        <label class="form-label" for="loginEmail">E-Mail</label>
-        <input
-          id="loginEmail"
-          type="email"
-          class="form-control"
-          bind:value={loginForm.email}
-          required
-        />
-      </div>
-
-      <div class="mb-3">
-        <label class="form-label" for="loginPassword">Passwort</label>
-        <div class="input-group">
-          <input
-            id="loginPassword"
-            type={showLoginPassword ? "text" : "password"}
-            class="form-control"
-            bind:value={loginForm.password}
-            required
-          />
-          <button
-            type="button"
-            class="btn btn-outline-secondary"
-            onclick={() => (showLoginPassword = !showLoginPassword)}
-          >
-            {showLoginPassword ? "Verbergen" : "Anzeigen"}
+        {:else}
+          <button class="btn btn-success" type="button" onclick={doLogin} disabled={loading}>
+            Einloggen
           </button>
-        </div>
+        {/if}
       </div>
-
-      {#if authError}
-        <div class="alert alert-danger py-2">{authError}</div>
-      {/if}
-
-      <button type="submit" class="btn btn-primary">
-        Anmelden
-      </button>
-
-      <button
-        type="button"
-        class="btn btn-link"
-        onclick={() => {
-          mode = "register";
-          authError = "";
-          passwordError = "";
-        }}
-      >
-        Ich brauche noch ein Konto
-      </button>
-    </form>
-  </div>
-{:else}
-  <p class="text-muted mt-2">
-    Angemeldet als <strong>{session.email}</strong>
-  </p>
-
-  {#if loadingProfile}
-    <p>Profil wird geladen...</p>
+    </div>
   {:else}
-    <form class="mt-3" onsubmit={handleProfileSubmit}>
-      <div class="mb-3">
-        <label for="name" class="form-label">Name / Nickname</label>
-        <input
-          id="name"
-          type="text"
-          class="form-control"
-          bind:value={profile.name}
-          required
-        />
-      </div>
+    <div class="card">
+      <div class="card-body">
+        <label class="form-label" for="name">Name / Nickname</label>
+        <input id="name" class="form-control mb-3" bind:value={name} />
 
-      <div class="mb-3">
-        <label for="gym" class="form-label">Gym / Standort</label>
-        <input
-          id="gym"
-          type="text"
-          class="form-control"
-          placeholder="z.B. Activ Fitness Winterthur"
-          bind:value={profile.gym}
-          required
-        />
-      </div>
+        <label class="form-label" for="gym">Gym / Standort</label>
+        <input id="gym" class="form-control mb-3" bind:value={gym} />
 
-      <div class="mb-3">
-        <label for="level" class="form-label">Trainingslevel</label>
-        <select
-          id="level"
-          class="form-select"
-          bind:value={profile.level}
-        >
+        <label class="form-label" for="levelSelect">Trainingslevel</label>
+        <select id="levelSelect" class="form-select mb-3" bind:value={trainingLevel}>
           <option value="beginner">Beginner</option>
           <option value="intermediate">Intermediate</option>
           <option value="advanced">Advanced</option>
         </select>
-      </div>
 
-      <div class="mb-3">
-        <label for="goals" class="form-label">Trainingsziele</label>
-        <textarea
-          id="goals"
-          class="form-control"
-          rows="3"
-          placeholder="z.B. Muskelaufbau, Technik verbessern..."
-          bind:value={profile.goals}
-        ></textarea>
-      </div>
+        <label class="form-label" for="goals">Trainingsziele</label>
+        <textarea id="goals" class="form-control mb-3" rows="2" bind:value={goals}></textarea>
 
-      <div class="mb-3">
-        <label for="times" class="form-label">Bevorzugte Zeiten</label>
-        <input
-          id="times"
-          type="text"
-          class="form-control"
-          placeholder="z.B. Mo, Mi, Fr ab 18:00"
-          bind:value={profile.trainingTimes}
-        />
-      </div>
+        <label class="form-label" for="times">Bevorzugte Zeiten</label>
+        <input id="times" class="form-control mb-3" bind:value={preferredTimes} />
 
-      <div class="mb-3">
-        <label for="contact" class="form-label">Kontakt (Instagram, E-Mail ...)</label>
-        <input
-          id="contact"
-          type="text"
-          class="form-control"
-          placeholder="@deininsta oder deine Mail"
-          bind:value={profile.contact}
-        />
-      </div>
+        <label class="form-label" for="contact">Kontakt</label>
+        <input id="contact" class="form-control mb-3" bind:value={contact} />
 
-      {#if profile.code}
-        <div class="mb-3">
-          <label class="form-label" for="profileCode">Deine GymBuddy ID</label>
-          <input
-            id="profileCode"
-            type="text"
-            class="form-control"
-            value={profile.code}
-            readonly
-          />
-          <div class="form-text">
-            Diese ID wird automatisch vergeben und kann nicht geändert werden.
-          </div>
+        <div class="d-flex gap-2 mt-3">
+          <button class="btn btn-primary" type="button" onclick={saveProfile} disabled={loading}>
+            Profil speichern
+          </button>
+          <button class="btn btn-outline-danger" type="button" onclick={deleteAccount} disabled={loading}>
+            Account löschen
+          </button>
         </div>
-      {/if}
 
-      {#if authError}
-        <div class="alert alert-danger py-2">{authError}</div>
-      {/if}
+        <div class="alert alert-info mt-4">
+          Für ein vollständig ausgefülltes Profil erhältst du einmalig 30 XP.
+          {#if profileBonusApplied}
+            <div class="mt-2"><strong>Bonus wurde bereits gutgeschrieben.</strong></div>
+          {/if}
+        </div>
 
-      <button type="submit" class="btn btn-primary">
-        Profil speichern
-      </button>
-
-      {#if saved}
-        <span class="ms-2 text-success">Gespeichert ✅</span>
-      {/if}
-    </form>
-
-    <div class="mt-4">
-      <button
-        type="button"
-        class="btn btn-outline-danger"
-        onclick={deleteAccount}
-        disabled={deleting}
-      >
-        {deleting ? "Account wird gelöscht..." : "Account löschen"}
-      </button>
-    </div>
-
-    <div class="alert alert-info mt-4">
-      Für ein vollständig ausgefülltes Profil erhältst du einmalig 30 XP (in deinem
-      Gamification-System).
+        <div class="text-muted">
+          <strong>Dein Fortschritt:</strong> Level {level} · XP {xp} · Trainings {trainingsCount}
+        </div>
+      </div>
     </div>
   {/if}
-{/if}
+</div>
 

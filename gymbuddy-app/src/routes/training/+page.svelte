@@ -1,37 +1,59 @@
 <script>
   import { onMount } from "svelte";
-  import { readSession, onSessionChange } from "$lib/session.js";
+  import { goto } from "$app/navigation";
+  import { readSession, subscribeSession } from "$lib/session.js";
 
-  let session = $state(null);
-  let isAuthenticated = $state(false);
-
-  let trainings = $state([]);
-  let summary = $state({ xp: 0, level: 1, trainingsCount: 0 });
+  let session = $state(readSession());
+  let isAuthenticated = $derived(!!session?.userId);
 
   let loading = $state(false);
-  let errorMsg = $state("");
+  let error = $state("");
 
-  let form = $state({
-    date: "",
-    withBuddy: false,
-    buddyName: "",
-    notes: ""
+  let trainings = $state([]);
+
+  let date = $state(() => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
   });
 
-  async function loadTrainings(userId) {
+  let withBuddy = $state(false);
+  let buddyName = $state("");
+  let notes = $state("");
+
+  let xp = $state(0);
+  let level = $state(1);
+  let trainingsCount = $state(0);
+
+  function setError(msg) {
+    error = msg || "";
+  }
+
+  async function loadTrainings() {
+    if (!session?.userId) return;
+
+    setError("");
     loading = true;
-    errorMsg = "";
 
     try {
-      const res = await fetch(`/api/trainings?userId=${encodeURIComponent(userId)}`);
-      if (!res.ok) throw new Error("Fehler beim Laden der Trainings.");
-      const data = await res.json();
-      trainings = Array.isArray(data?.trainings) ? data.trainings : [];
-      summary = data?.summary ?? { xp: 0, level: 1, trainingsCount: 0 };
+      const res = await fetch(`/api/trainings?userId=${encodeURIComponent(session.userId)}`);
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) throw new Error(data?.error || "Fehler beim Laden der Trainings.");
+
+      trainings = Array.isArray(data?.trainings) ? data.trainings : Array.isArray(data) ? data : [];
+
+      if (typeof data?.xp === "number") xp = data.xp;
+      if (typeof data?.level === "number") level = data.level;
+      if (typeof data?.trainingsCount === "number") trainingsCount = data.trainingsCount;
     } catch (e) {
-      errorMsg = e?.message ?? "Fehler beim Laden der Trainings.";
+      setError(e?.message || "Fehler beim Laden der Trainings.");
       trainings = [];
-      summary = { xp: 0, level: 1, trainingsCount: 0 };
+      xp = 0;
+      level = 1;
+      trainingsCount = 0;
     } finally {
       loading = false;
     }
@@ -40,40 +62,54 @@
   async function saveTraining() {
     if (!session?.userId) return;
 
-    errorMsg = "";
+    setError("");
+    loading = true;
 
     try {
+      const payload = {
+        userId: session.userId,
+        date,
+        withBuddy,
+        buddyName: withBuddy ? buddyName : "",
+        notes
+      };
+
       const res = await fetch("/api/trainings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: session.userId,
-          date: form.date,
-          withBuddy: form.withBuddy,
-          buddyName: form.withBuddy ? form.buddyName : "",
-          notes: form.notes
-        })
+        body: JSON.stringify(payload)
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error ?? "Fehler beim Speichern.");
+      if (!res.ok) throw new Error(data?.error || "Training konnte nicht gespeichert werden.");
 
-      if (data?.training) {
-        trainings = [data.training, ...trainings];
-      }
+      date = (() => {
+        const d = new Date();
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+        return `${yyyy}-${mm}-${dd}`;
+      })();
+      withBuddy = false;
+      buddyName = "";
+      notes = "";
 
-      if (data?.summary) summary = data.summary;
-
-      form = { date: "", withBuddy: false, buddyName: "", notes: "" };
+      await loadTrainings();
     } catch (e) {
-      errorMsg = e?.message ?? "Fehler beim Speichern.";
+      setError(e?.message || "Training konnte nicht gespeichert werden.");
+    } finally {
+      loading = false;
     }
   }
 
   async function deleteTraining(id) {
     if (!session?.userId) return;
 
-    errorMsg = "";
+    const ok = confirm("Training wirklich löschen?");
+    if (!ok) return;
+
+    setError("");
+    loading = true;
 
     try {
       const res = await fetch(`/api/trainings/${encodeURIComponent(id)}?userId=${encodeURIComponent(session.userId)}`, {
@@ -81,127 +117,165 @@
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error ?? "Fehler beim Loeschen.");
+      if (!res.ok) throw new Error(data?.error || "Training konnte nicht gelöscht werden.");
 
-      trainings = trainings.filter((t) => String(t._id) !== String(id));
-      if (data?.summary) summary = data.summary;
+      await loadTrainings();
     } catch (e) {
-      errorMsg = e?.message ?? "Fehler beim Loeschen.";
+      setError(e?.message || "Training konnte nicht gelöscht werden.");
+    } finally {
+      loading = false;
     }
   }
 
   onMount(() => {
-    session = readSession();
-    isAuthenticated = !!session?.userId;
-
-    if (session?.userId) loadTrainings(session.userId);
-
-    const unsub = onSessionChange((s) => {
+    const unsub = subscribeSession((s) => {
       session = s;
-      isAuthenticated = !!s?.userId;
-      if (s?.userId) loadTrainings(s.userId);
+      if (s?.userId) loadTrainings();
       else {
         trainings = [];
-        summary = { xp: 0, level: 1, trainingsCount: 0 };
+        xp = 0;
+        level = 1;
+        trainingsCount = 0;
+        error = "";
       }
     });
 
-    return () => unsub();
+    if (session?.userId) loadTrainings();
+
+    return unsub;
   });
 </script>
 
-<h1 class="mb-3">Trainings erfassen</h1>
+<div class="container py-4">
+  <h1 class="mb-3">Trainings erfassen</h1>
 
-{#if !isAuthenticated}
-  <div class="alert alert-warning">
-    Bitte melde dich an, um Trainings zu erfassen und XP zu sammeln.
-  </div>
-  <a class="btn btn-primary" href="/profile">Zur Anmeldung</a>
-{:else}
-  {#if errorMsg}
-    <div class="alert alert-danger">{errorMsg}</div>
-  {/if}
+  {#if !isAuthenticated}
+    <div class="alert alert-warning">
+      Bitte melde dich an, um Trainings zu erfassen und XP zu sammeln.
+    </div>
+    <button class="btn btn-primary" type="button" onclick={() => goto("/profile")}>
+      Zur Anmeldung
+    </button>
+  {:else}
+    {#if error}
+      <div class="alert alert-danger">{error}</div>
+    {/if}
 
-  <div class="row g-4">
-    <div class="col-lg-7">
-      <div class="card p-3">
-        <div class="row g-3">
-          <div class="col-md-6">
-            <label class="form-label" for="t-date">Datum</label>
-            <input id="t-date" class="form-control" type="date" bind:value={form.date} />
+    <div class="card mb-4">
+      <div class="card-body">
+        <div class="row g-3 align-items-end">
+          <div class="col-md-4">
+            <label class="form-label" for="trainingDate">Datum</label>
+            <input id="trainingDate" class="form-control" type="date" bind:value={date} />
           </div>
 
-          <div class="col-md-6 d-flex align-items-end">
+          <div class="col-md-4">
+            <label class="form-label" for="withBuddyToggle">Training mit Buddy?</label>
             <div class="form-check form-switch">
-              <input id="t-buddy" class="form-check-input" type="checkbox" bind:checked={form.withBuddy} />
-              <label class="form-check-label" for="t-buddy">Training mit Buddy?</label>
+              <input
+                id="withBuddyToggle"
+                class="form-check-input"
+                type="checkbox"
+                role="switch"
+                bind:checked={withBuddy}
+              />
+              <label class="form-check-label" for="withBuddyToggle">Ja, Training mit GymBuddy</label>
             </div>
           </div>
 
-          {#if form.withBuddy}
-            <div class="col-md-12">
-              <label class="form-label" for="t-buddyName">Buddy Name</label>
-              <input id="t-buddyName" class="form-control" bind:value={form.buddyName} />
-            </div>
-          {/if}
-
-          <div class="col-12">
-            <label class="form-label" for="t-notes">Notizen (optional)</label>
-            <textarea id="t-notes" class="form-control" rows="3" bind:value={form.notes}></textarea>
+          <div class="col-md-4">
+            <label class="form-label" for="buddyName">Buddy Name</label>
+            <input
+              id="buddyName"
+              class="form-control"
+              placeholder="z.B. Andrin"
+              bind:value={buddyName}
+              disabled={!withBuddy}
+            />
           </div>
 
           <div class="col-12">
-            <button class="btn btn-primary" type="button" onclick={saveTraining}>
+            <label class="form-label" for="notes">Notizen (optional)</label>
+            <textarea
+              id="notes"
+              class="form-control"
+              rows="3"
+              placeholder="z.B. PR im Kreuzheben, Technik verbessert..."
+              bind:value={notes}
+            ></textarea>
+          </div>
+
+          <div class="col-12">
+            <button class="btn btn-primary" type="button" onclick={saveTraining} disabled={loading}>
               Training speichern
             </button>
           </div>
         </div>
       </div>
-
-      <div class="mt-4">
-        <h3 class="h5">Letzte Trainings</h3>
-
-        {#if loading}
-          <div class="text-muted">Laedt...</div>
-        {:else}
-          {#if trainings.length === 0}
-            <div class="text-muted">Noch keine Trainings erfasst.</div>
-          {:else}
-            <div class="list-group">
-              {#each trainings as t}
-                <div class="list-group-item d-flex justify-content-between align-items-start">
-                  <div>
-                    <div class="fw-bold">{t.date || "Ohne Datum"}</div>
-                    <div class="text-muted small">
-                      {t.withBuddy ? `Mit Buddy: ${t.buddyName || ""}` : "Allein"} · +{t.xpGain} XP
-                    </div>
-                    {#if t.notes}
-                      <div class="mt-2">{t.notes}</div>
-                    {/if}
-                  </div>
-
-                  <button class="btn btn-outline-danger btn-sm" type="button" onclick={() => deleteTraining(t._id)}>
-                    Loeschen
-                  </button>
-                </div>
-              {/each}
-            </div>
-          {/if}
-        {/if}
-      </div>
     </div>
 
-    <div class="col-lg-5">
-      <div class="card p-3">
-        <div class="fw-bold mb-2">Dein Fortschritt</div>
-        <div><b>Level:</b> {summary.level}</div>
-        <div><b>XP:</b> {summary.xp}</div>
-        <div><b>Trainings gesamt:</b> {summary.trainingsCount}</div>
-        <div class="text-muted small mt-2">
-          10 XP pro Training allein, 20 XP mit Buddy, 30 XP fuer Profil.
+    <div class="row g-4">
+      <div class="col-lg-4">
+        <div class="card">
+          <div class="card-body">
+            <h5 class="card-title mb-3">Dein Fortschritt</h5>
+            <div><strong>Level:</strong> {level}</div>
+            <div><strong>XP:</strong> {xp}</div>
+            <div><strong>Trainings gesamt:</strong> {trainingsCount}</div>
+            <div class="text-muted mt-2">
+              10 XP pro Training allein, 20 XP mit Buddy, 30 XP für Profil.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-8">
+        <div class="card">
+          <div class="card-body">
+            <h5 class="card-title mb-3">Letzte Trainings</h5>
+
+            {#if loading && trainings.length === 0}
+              <div class="text-muted">Lade...</div>
+            {:else if trainings.length === 0}
+              <div class="text-muted">Noch keine Trainings erfasst.</div>
+            {:else}
+              <div class="list-group">
+                {#each trainings as t (t._id || t.id)}
+                  <div class="list-group-item d-flex justify-content-between align-items-start gap-3">
+                    <div class="flex-grow-1">
+                      <div class="fw-semibold">
+                        {t.date || ""}
+                        {#if t.withBuddy}
+                          <span class="badge text-bg-success ms-2">mit Buddy</span>
+                        {:else}
+                          <span class="badge text-bg-secondary ms-2">allein</span>
+                        {/if}
+                      </div>
+
+                      {#if t.buddyName}
+                        <div class="text-muted">Buddy: {t.buddyName}</div>
+                      {/if}
+
+                      {#if t.notes}
+                        <div class="mt-2">{t.notes}</div>
+                      {/if}
+                    </div>
+
+                    <button
+                      class="btn btn-outline-danger btn-sm"
+                      type="button"
+                      onclick={() => deleteTraining(t._id || t.id)}
+                      disabled={loading}
+                    >
+                      Löschen
+                    </button>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
         </div>
       </div>
     </div>
-  </div>
-{/if}
-
+  {/if}
+</div>
