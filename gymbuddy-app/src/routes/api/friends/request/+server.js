@@ -1,56 +1,51 @@
-// src/routes/api/friends/request/+server.js
 import { json } from "@sveltejs/kit";
 import { ObjectId } from "mongodb";
 import { getDb } from "$lib/server/mongo.js";
 
-function toObjectId(id) {
+function toObjectIdOrNull(id) {
   try {
-    return new ObjectId(String(id));
+    return new ObjectId(id);
   } catch {
     return null;
   }
 }
 
 export async function POST({ request }) {
-  const body = await request.json();
+  const body = await request.json().catch(() => null);
+  if (!body) return json({ error: "invalid json" }, { status: 400 });
 
-  const fromUserId = body?.fromUserId ?? body?.userId ?? body?.currentUserId ?? "";
-  const toUserId = body?.toUserId ?? body?.targetId ?? body?.otherUserId ?? "";
+  const userId = String(body.userId ?? "").trim();
+  const targetId = String(body.targetId ?? "").trim();
 
-  if (!fromUserId || !toUserId || fromUserId === toUserId) {
-    return json({ error: "invalid ids" }, { status: 400 });
-  }
+  if (!userId || !targetId) return json({ error: "missing ids" }, { status: 400 });
+  if (userId === targetId) return json({ error: "cannot request yourself" }, { status: 400 });
 
-  const fromObj = toObjectId(fromUserId);
-  const toObj = toObjectId(toUserId);
-  if (!fromObj || !toObj) return json({ error: "invalid ids" }, { status: 400 });
-
-  const fromStr = fromObj.toString();
-  const toStr = toObj.toString();
+  const uOid = toObjectIdOrNull(userId);
+  const tOid = toObjectIdOrNull(targetId);
+  if (!uOid || !tOid) return json({ error: "invalid ids" }, { status: 400 });
 
   const db = await getDb();
   const users = db.collection("users");
 
-  const [me, target] = await Promise.all([
-    users.findOne({ _id: fromObj }, { projection: { friends: 1, friendRequestsOut: 1, friendRequestsIn: 1 } }),
-    users.findOne({ _id: toObj }, { projection: { friends: 1, friendRequestsOut: 1, friendRequestsIn: 1 } })
-  ]);
+  const me = await users.findOne({ _id: uOid }, { projection: { friends: 1 } });
+  const other = await users.findOne({ _id: tOid }, { projection: { friends: 1 } });
 
-  if (!me || !target) return json({ error: "user not found" }, { status: 404 });
+  if (!me || !other) return json({ error: "user not found" }, { status: 404 });
 
-  const friends = Array.isArray(me.friends) ? me.friends : [];
-  const out = Array.isArray(me.friendRequestsOut) ? me.friendRequestsOut : [];
-  const inc = Array.isArray(me.friendRequestsIn) ? me.friendRequestsIn : [];
-
-  if (friends.includes(toStr) || out.includes(toStr) || inc.includes(toStr)) {
-    return json({ ok: true, status: "unchanged" });
+  const meFriends = Array.isArray(me.friends) ? me.friends : [];
+  if (meFriends.includes(targetId)) {
+    return json({ ok: true, alreadyFriends: true });
   }
 
-  await Promise.all([
-    users.updateOne({ _id: fromObj }, { $addToSet: { friendRequestsOut: toStr } }),
-    users.updateOne({ _id: toObj }, { $addToSet: { friendRequestsIn: fromStr } })
-  ]);
+  await users.updateOne(
+    { _id: uOid },
+    { $addToSet: { friendRequestsOut: targetId } }
+  );
+
+  await users.updateOne(
+    { _id: tOid },
+    { $addToSet: { friendRequestsIn: userId } }
+  );
 
   return json({ ok: true });
 }
-

@@ -1,152 +1,73 @@
 <script>
   import { onMount } from "svelte";
   import { calculateLevel } from "$lib/gamification.js";
-  import { readSession } from "$lib/session.js";
+  import { readSession, onSessionChange } from "$lib/session.js";
 
   let isAuthenticated = $state(false);
-  let userId = $state("");
-  let email = $state("");
+  let session = $state(null);
 
-  let xp = $state(0);
-  let level = $state(1);
-  let trainingsCount = $state(0);
-  let soloCount = $state(0);
-  let buddyCount = $state(0);
-  let recentTrainings = $state([]);
+  let stats = $state({
+    xp: 0,
+    level: 1,
+    trainingsCount: 0
+  });
 
-  let loading = $state(false);
-  let error = $state("");
+  async function loadServerStats(userId) {
+    const res = await fetch(`/api/profile?userId=${encodeURIComponent(userId)}`);
+    if (!res.ok) return;
+    const data = await res.json();
 
-  async function loadDashboard() {
-    if (!isAuthenticated || !userId) return;
+    const xp = Number(data?.xp ?? 0);
+    const trainingsCount = Number(data?.trainingsCount ?? 0);
 
-    loading = true;
-    error = "";
-
-    try {
-      const [profileRes, trainingsRes] = await Promise.all([
-        fetch(`/api/profile?userId=${encodeURIComponent(userId)}`),
-        fetch(`/api/trainings?userId=${encodeURIComponent(userId)}`)
-      ]);
-
-      if (!profileRes.ok) {
-        const err = await profileRes.json().catch(() => ({}));
-        throw newError(err.error || "Profil konnte nicht geladen werden.");
-      }
-
-      if (!trainingsRes.ok) {
-        const err = await trainingsRes.json().catch(() => ({}));
-        throw new Error(err.error || "Trainings konnten nicht geladen werden.");
-      }
-
-      const profileData = await profileRes.json();
-      const trainingsData = await trainingsRes.json();
-
-      xp = Number(profileData?.xp ?? 0);
-      trainingsCount = Number(profileData?.trainingsCount ?? trainingsData?.trainingsCount ?? 0);
-      level = calculateLevel(xp);
-
-      const list = Array.isArray(trainingsData?.trainings) ? trainingsData.trainings : [];
-      buddyCount = list.filter((t) => !!t?.withBuddy).length;
-      soloCount = list.length - buddyCount;
-      recentTrainings = list.slice(0, 5);
-    } catch (e) {
-      error = e?.message || "Fehler beim Laden.";
-    } finally {
-      loading = false;
-    }
+    stats = {
+      xp,
+      trainingsCount,
+      level: calculateLevel(xp)
+    };
   }
 
   onMount(() => {
-    const auth = readSession();
-    if (auth?.userId) {
-      isAuthenticated = true;
-      userId = auth.userId;
-      email = auth.email || "";
-      loadDashboard();
+    session = readSession();
+    isAuthenticated = !!session?.userId;
+
+    if (session?.userId) {
+      loadServerStats(session.userId);
     }
+
+    const unsub = onSessionChange((s) => {
+      session = s;
+      isAuthenticated = !!s?.userId;
+      if (s?.userId) loadServerStats(s.userId);
+      else stats = { xp: 0, level: 1, trainingsCount: 0 };
+    });
+
+    return () => unsub();
   });
 </script>
 
-<div class="container py-4">
-  <h1 class="mb-3">GymBuddy</h1>
+<div class="hero d-flex flex-column justify-content-center align-items-center text-center">
+  <h1 class="mb-3">Finde deinen GymBuddy</h1>
+  <p class="lead mb-4">
+    Erstelle dein Profil, finde Trainingspartner in deinem Gym und sammle XP.
+  </p>
 
   {#if !isAuthenticated}
-    <div class="alert alert-info">
-      Bitte melde dich an, um Gymbuddies zu finden, Trainings zu erfassen und XP zu sammeln.
+    <div class="d-flex flex-wrap justify-content-center gap-3 mb-4">
+      <a class="btn btn-primary" href="/profile">Profil erstellen</a>
+      <a class="btn btn-outline-primary" href="/profile">Login</a>
     </div>
-    <a href="/profile" class="btn btn-primary">Zum Login / Account erstellen</a>
   {:else}
-    <p class="text-muted">Angemeldet als <strong>{email}</strong></p>
+    <div class="d-flex flex-wrap justify-content-center gap-3 mb-4">
+      <a class="btn btn-primary" href="/buddies">Gymbuddies entdecken</a>
+      <a class="btn btn-outline-primary" href="/training">Training erfassen</a>
+    </div>
 
-    {#if error}
-      <div class="alert alert-danger">{error}</div>
-    {/if}
-
-    <div class="row g-3">
-      <div class="col-12 col-lg-5">
-        <div class="card shadow-sm">
-          <div class="card-body">
-            <h5 class="card-title">Dein Fortschritt</h5>
-            {#if loading}
-              <div class="text-muted">Lade...</div>
-            {:else}
-              <p class="mb-1"><strong>Level:</strong> {level}</p>
-              <p class="mb-1"><strong>XP:</strong> {xp}</p>
-              <p class="mb-1"><strong>Trainings gesamt:</strong> {trainingsCount}</p>
-              <p class="mb-0 text-muted" style="font-size: 0.95rem;">
-                {soloCount} allein, {buddyCount} mit Buddy
-              </p>
-            {/if}
-          </div>
-        </div>
-
-        <div class="card shadow-sm mt-3">
-          <div class="card-body">
-            <h5 class="card-title">Nächste Schritte</h5>
-            <div class="d-grid gap-2">
-              <a href="/buddies" class="btn btn-outline-primary">Gymbuddies entdecken</a>
-              <a href="/training" class="btn btn-outline-primary">Training erfassen</a>
-              <a href="/compare" class="btn btn-outline-primary">Vergleich / Ranking</a>
-              <a href="/profile" class="btn btn-outline-secondary">Mein Profil</a>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="col-12 col-lg-7">
-        <div class="card shadow-sm">
-          <div class="card-body">
-            <h5 class="card-title">Letzte Trainings</h5>
-            {#if loading}
-              <div class="text-muted">Lade...</div>
-            {:else if recentTrainings.length === 0}
-              <div class="text-muted">Noch keine Trainings erfasst.</div>
-            {:else}
-              <ul class="list-group list-group-flush">
-                {#each recentTrainings as t}
-                  <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <div>
-                      <div><strong>{t.date}</strong></div>
-                      <div class="text-muted" style="font-size: 0.9rem;">
-                        {#if t.withBuddy}
-                          Mit Buddy: {t.buddyName}
-                        {:else}
-                          Allein
-                        {/if}
-                        {#if t.notes}
-                          · {t.notes}
-                        {/if}
-                      </div>
-                    </div>
-                    <span class="badge bg-primary rounded-pill">+{t.xpGain} XP</span>
-                  </li>
-                {/each}
-              </ul>
-            {/if}
-          </div>
-        </div>
-      </div>
+    <div class="card p-3" style="max-width: 420px; width: 100%;">
+      <div class="fw-bold mb-2">Dein Fortschritt</div>
+      <div>Level: {stats.level}</div>
+      <div>XP: {stats.xp}</div>
+      <div>Trainings gesamt: {stats.trainingsCount}</div>
     </div>
   {/if}
 </div>

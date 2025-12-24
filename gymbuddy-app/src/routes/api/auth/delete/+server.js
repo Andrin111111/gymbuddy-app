@@ -1,49 +1,46 @@
-// src/routes/api/auth/delete/+server.js
 import { json } from "@sveltejs/kit";
 import { ObjectId } from "mongodb";
 import { getDb } from "$lib/server/mongo.js";
 
-function toObjectId(id) {
+function toObjectIdOrNull(id) {
   try {
-    return new ObjectId(String(id));
+    return new ObjectId(id);
   } catch {
     return null;
   }
 }
 
 export async function POST({ request }) {
-  try {
-    const body = await request.json();
-    const userId = String(body?.userId ?? "").trim();
-    if (!userId) return json({ error: "userId fehlt." }, { status: 400 });
+  const body = await request.json().catch(() => null);
+  if (!body) return json({ error: "invalid json" }, { status: 400 });
 
-    const _id = toObjectId(userId);
-    if (!_id) return json({ error: "invalid userId" }, { status: 400 });
+  const userId = String(body.userId ?? "").trim();
+  if (!userId) return json({ error: "missing userId" }, { status: 400 });
 
-    const db = await getDb();
-    const users = db.collection("users");
-    const trainings = db.collection("trainings");
+  const oid = toObjectIdOrNull(userId);
+  if (!oid) return json({ error: "invalid userId" }, { status: 400 });
 
-    const userIdStr = _id.toString();
+  const db = await getDb();
+  const users = db.collection("users");
+  const trainings = db.collection("trainings");
 
-    await Promise.all([
-      users.deleteOne({ _id }),
-      trainings.deleteMany({ userId: userIdStr }),
-      users.updateMany(
-        {},
-        {
-          $pull: {
-            friends: userIdStr,
-            friendRequestsIn: userIdStr,
-            friendRequestsOut: userIdStr
-          }
-        }
-      )
-    ]);
+  await trainings.deleteMany({ userId });
 
-    return json({ ok: true });
-  } catch (err) {
-    console.error(err);
-    return json({ error: "Account löschen fehlgeschlagen." }, { status: 500 });
+  await users.updateMany(
+    {},
+    {
+      $pull: {
+        friends: userId,
+        friendRequestsIn: userId,
+        friendRequestsOut: userId
+      }
+    }
+  );
+
+  const del = await users.deleteOne({ _id: oid });
+  if (del.deletedCount === 0) {
+    return json({ error: "user not found" }, { status: 404 });
   }
+
+  return json({ ok: true });
 }

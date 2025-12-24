@@ -1,58 +1,64 @@
-// src/routes/api/trainings/[id]/+server.js
 import { json } from "@sveltejs/kit";
-import { getDb } from "$lib/server/mongo.js";
 import { ObjectId } from "mongodb";
+import { getDb } from "$lib/server/mongo.js";
 import { calculateLevel } from "$lib/gamification.js";
 
-function toObjectId(id) {
+function toObjectIdOrNull(id) {
   try {
-    return new ObjectId(String(id));
+    return new ObjectId(id);
   } catch {
     return null;
   }
 }
 
 export async function DELETE({ params, url }) {
-  const id = params.id;
+  const trainingId = params.id;
   const userId = url.searchParams.get("userId");
 
-  if (!id || !userId) {
-    return json({ error: "id and userId required" }, { status: 400 });
-  }
+  if (!userId) return json({ error: "missing userId" }, { status: 400 });
 
-  const trainingObj = toObjectId(id);
-  const userObj = toObjectId(userId);
+  const trainingOid = toObjectIdOrNull(trainingId);
+  if (!trainingOid) return json({ error: "invalid training id" }, { status: 400 });
 
-  if (!trainingObj || !userObj) {
-    return json({ error: "invalid ids" }, { status: 400 });
-  }
-
-  const userIdStr = userObj.toString();
+  const userOid = toObjectIdOrNull(userId);
+  if (!userOid) return json({ error: "invalid userId" }, { status: 400 });
 
   const db = await getDb();
-  const trainings = db.collection("trainings");
-  const users = db.collection("users");
+  const trainingsCol = db.collection("trainings");
+  const usersCol = db.collection("users");
 
-  const training = await trainings.findOne({ _id: trainingObj, userId: userIdStr });
-  if (!training) return json({ error: "Training not found" }, { status: 404 });
+  const training = await trainingsCol.findOne({ _id: trainingOid, userId });
+  if (!training) return json({ error: "training not found" }, { status: 404 });
 
-  await trainings.deleteOne({ _id: trainingObj });
+  await trainingsCol.deleteOne({ _id: trainingOid, userId });
 
-  const xpToSubtract = Number(training.xpGain ?? 0);
+  const xpGain = Number(training.xpGain ?? 0);
 
-  const { value: updatedUser } = await users.findOneAndUpdate(
-    { _id: userObj },
-    { $inc: { xp: -xpToSubtract, trainingsCount: -1 }, $set: { updatedAt: new Date() } },
-    { returnDocument: "after" }
+  await usersCol.updateOne(
+    { _id: userOid },
+    { $inc: { xp: -xpGain, trainingsCount: -1 }, $set: { updatedAt: new Date() } }
   );
 
-  const xp = Math.max(0, Number(updatedUser?.xp ?? 0));
-  const trainingsCount = Math.max(0, Number(updatedUser?.trainingsCount ?? 0));
+  const user = await usersCol.findOne({ _id: userOid });
+  let xp = Number(user?.xp ?? 0);
+  let trainingsCount = Number(user?.trainingsCount ?? 0);
+
+  if (xp < 0 || trainingsCount < 0) {
+    xp = Math.max(0, xp);
+    trainingsCount = Math.max(0, trainingsCount);
+    await usersCol.updateOne(
+      { _id: userOid },
+      { $set: { xp, trainingsCount, updatedAt: new Date() } }
+    );
+  }
 
   return json({
     ok: true,
-    xp,
-    trainingsCount,
-    level: calculateLevel(xp)
+    summary: {
+      xp,
+      level: calculateLevel(xp),
+      trainingsCount
+    }
   });
 }
+

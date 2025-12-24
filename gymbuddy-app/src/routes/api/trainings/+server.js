@@ -1,12 +1,11 @@
-// src/routes/api/trainings/+server.js
 import { json } from "@sveltejs/kit";
 import { ObjectId } from "mongodb";
 import { getDb } from "$lib/server/mongo.js";
-import { XP_PER_TRAINING_ALONE, XP_PER_TRAINING_WITH_BUDDY, calculateLevel } from "$lib/gamification.js";
+import { calculateTrainingXp, calculateLevel } from "$lib/gamification.js";
 
-function toObjectId(id) {
+function toObjectIdOrNull(id) {
   try {
-    return new ObjectId(String(id));
+    return new ObjectId(id);
   } catch {
     return null;
   }
@@ -14,108 +13,101 @@ function toObjectId(id) {
 
 export async function GET({ url }) {
   const userId = url.searchParams.get("userId");
-  if (!userId) return json({ error: "userId missing" }, { status: 400 });
-
-  const userObj = toObjectId(userId);
-  if (!userObj) return json({ error: "invalid userId" }, { status: 400 });
-
-  const userIdStr = userObj.toString();
+  if (!userId) return json({ error: "missing userId" }, { status: 400 });
 
   const db = await getDb();
   const trainingsCol = db.collection("trainings");
-  const users = db.collection("users");
+  const usersCol = db.collection("users");
 
-  const list = await trainingsCol
-    .find({ userId: userIdStr })
-    .sort({ date: -1, createdAt: -1 })
+  const trainings = await trainingsCol
+    .find({ userId })
+    .sort({ createdAt: -1 })
     .toArray();
 
-  const trainings = list.map((t) => ({
-    id: t._id.toString(),
-    date: t.date,
-    withBuddy: !!t.withBuddy,
-    buddyName: t.buddyName ?? "",
-    notes: t.notes ?? "",
-    xpGain: Number(t.xpGain ?? 0),
-    createdAt: t.createdAt ?? null
-  }));
-
-  const user = await users.findOne({ _id: userObj }, { projection: { xp: 1, trainingsCount: 1 } });
+  const oid = toObjectIdOrNull(userId);
+  const user = oid ? await usersCol.findOne({ _id: oid }) : null;
 
   const xp = Number(user?.xp ?? 0);
   const trainingsCount = Number(user?.trainingsCount ?? trainings.length);
 
   return json({
-    trainings,
-    xp,
-    trainingsCount,
-    level: calculateLevel(xp)
+    trainings: trainings.map((t) => ({
+      ...t,
+      _id: String(t._id)
+    })),
+    summary: {
+      xp,
+      level: calculateLevel(xp),
+      trainingsCount
+    }
   });
 }
 
 export async function POST({ request }) {
-  const data = await request.json();
+  const body = await request.json().catch(() => null);
+  if (!body) return json({ error: "invalid json" }, { status: 400 });
 
-  const userId = data?.userId;
-  const date = data?.date;
-  const withBuddy = !!data?.withBuddy;
-  const buddyName = withBuddy ? String(data?.buddyName ?? "").trim() : "";
-  const notes = String(data?.notes ?? "");
+  const userId = String(body.userId ?? "").trim();
+  if (!userId) return json({ error: "missing userId" }, { status: 400 });
 
-  if (!userId || !date) {
-    return json({ error: "userId and date required" }, { status: 400 });
-  }
+  const oid = toObjectIdOrNull(userId);
+  if (!oid) return json({ error: "invalid userId" }, { status: 400 });
 
-  const userObj = toObjectId(userId);
-  if (!userObj) return json({ error: "invalid userId" }, { status: 400 });
+  const date = String(body.date ?? "").trim();
+  const withBuddy = Boolean(body.withBuddy);
+  const buddyName = String(body.buddyName ?? "").trim();
+  const notes = String(body.notes ?? "").trim();
 
-  const userIdStr = userObj.toString();
+  const xpGain = Number.isFinite(Number(body.xpGain))
+    ? Number(body.xpGain)
+    : calculateTrainingXp(withBuddy);
 
   const db = await getDb();
   const trainingsCol = db.collection("trainings");
-  const users = db.collection("users");
+  const usersCol = db.collection("users");
 
-  const xpGain = withBuddy ? XP_PER_TRAINING_WITH_BUDDY : XP_PER_TRAINING_ALONE;
+  const now = new Date();
 
-  const trainingDoc = {
-    userId: userIdStr,
+  const userExists = await usersCol.findOne({ _id: oid }, { projection: { _id: 1 } });
+  if (!userExists) return json({ error: "user not found" }, { status: 404 });
+
+  const insertRes = await trainingsCol.insertOne({
+    userId,
     date,
     withBuddy,
-    buddyName,
+    buddyName: withBuddy ? buddyName : "",
     notes,
     xpGain,
-    createdAt: new Date()
-  };
+    createdAt: now
+  });
 
-  const insert = await trainingsCol.insertOne(trainingDoc);
-
-  const { value: updatedUser } = await users.findOneAndUpdate(
-    { _id: userObj },
-    { $inc: { xp: xpGain, trainingsCount: 1 }, $set: { updatedAt: new Date() } },
-    { returnDocument: "after" }
+  await usersCol.updateOne(
+    { _id: oid },
+    {
+      $inc: { xp: xpGain, trainingsCount: 1 },
+      $set: { updatedAt: now }
+    }
   );
 
-  if (!updatedUser) {
-    await trainingsCol.deleteOne({ _id: insert.insertedId });
-    return json({ error: "User not found" }, { status: 404 });
-  }
-
-  const xp = Number(updatedUser.xp ?? 0);
-  const trainingsCount = Number(updatedUser.trainingsCount ?? 0);
+  const user = await usersCol.findOne({ _id: oid });
+  const xp = Number(user?.xp ?? 0);
 
   return json({
     ok: true,
     training: {
-      id: insert.insertedId.toString(),
+      _id: String(insertRes.insertedId),
+      userId,
       date,
       withBuddy,
-      buddyName,
+      buddyName: withBuddy ? buddyName : "",
       notes,
       xpGain,
-      createdAt: trainingDoc.createdAt
+      createdAt: now
     },
-    xp,
-    trainingsCount,
-    level: calculateLevel(xp)
+    summary: {
+      xp,
+      level: calculateLevel(xp),
+      trainingsCount: Number(user?.trainingsCount ?? 0)
+    }
   });
 }

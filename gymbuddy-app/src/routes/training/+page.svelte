@@ -1,259 +1,206 @@
 <script>
   import { onMount } from "svelte";
-  import { calculateUserStats } from "$lib/gamification";
+  import { readSession, onSessionChange } from "$lib/session.js";
 
-  const PROFILE_KEY = "gymbuddy-profile";
-  const SESSION_KEY = "gymbuddy-session";
+  let session = $state(null);
+  let isAuthenticated = $state(false);
 
   let trainings = $state([]);
-  let profile = $state(null);
-  let stats = $state({
-    soloCount: 0,
-    buddyCount: 0,
-    xp: 0,
-    level: 1
-  });
+  let summary = $state({ xp: 0, level: 1, trainingsCount: 0 });
+
+  let loading = $state(false);
+  let errorMsg = $state("");
 
   let form = $state({
-    date: new Date().toISOString().slice(0, 10),
+    date: "",
     withBuddy: false,
     buddyName: "",
     notes: ""
   });
 
-  let isAuthenticated = $state(false);
-  let loading = $state(false);
-  let error = $state("");
-
-  function updateStats() {
-    stats = calculateUserStats(trainings, profile);
-  }
-
-  async function loadTrainings() {
+  async function loadTrainings(userId) {
     loading = true;
-    error = "";
+    errorMsg = "";
+
     try {
-      const res = await fetch("/api/trainings");
-      if (!res.ok) {
-        throw new Error("Fehler beim Laden der Trainings.");
-      }
+      const res = await fetch(`/api/trainings?userId=${encodeURIComponent(userId)}`);
+      if (!res.ok) throw new Error("Fehler beim Laden der Trainings.");
       const data = await res.json();
-      trainings = data;
-      updateStats();
-    } catch (err) {
-      console.error(err);
-      error = err.message || "Unbekannter Fehler beim Laden der Trainings.";
+      trainings = Array.isArray(data?.trainings) ? data.trainings : [];
+      summary = data?.summary ?? { xp: 0, level: 1, trainingsCount: 0 };
+    } catch (e) {
+      errorMsg = e?.message ?? "Fehler beim Laden der Trainings.";
+      trainings = [];
+      summary = { xp: 0, level: 1, trainingsCount: 0 };
     } finally {
       loading = false;
     }
   }
 
-  onMount(() => {
-    const savedSession = localStorage.getItem(SESSION_KEY);
-    isAuthenticated = !!savedSession;
+  async function saveTraining() {
+    if (!session?.userId) return;
 
-    const savedProfile = localStorage.getItem(PROFILE_KEY);
-    profile = savedProfile ? JSON.parse(savedProfile) : null;
-
-    if (isAuthenticated) {
-      loadTrainings();
-    }
-  });
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-    error = "";
-
-    const payload = {
-      date: form.date,
-      withBuddy: form.withBuddy,
-      buddyName: form.withBuddy ? form.buddyName : "",
-      notes: form.notes
-    };
+    errorMsg = "";
 
     try {
       const res = await fetch("/api/trainings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          userId: session.userId,
+          date: form.date,
+          withBuddy: form.withBuddy,
+          buddyName: form.withBuddy ? form.buddyName : "",
+          notes: form.notes
+        })
       });
 
-      if (!res.ok) {
-        let body;
-        try {
-          body = await res.json();
-        } catch {
-          body = {};
-        }
-        throw new Error(body.error || "Fehler beim Speichern des Trainings.");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? "Fehler beim Speichern.");
+
+      if (data?.training) {
+        trainings = [data.training, ...trainings];
       }
 
-      const created = await res.json();
-      trainings = [created, ...trainings];
-      updateStats();
+      if (data?.summary) summary = data.summary;
 
-      form = {
-        date: new Date().toISOString().slice(0, 10),
-        withBuddy: false,
-        buddyName: "",
-        notes: ""
-      };
-    } catch (err) {
-      console.error(err);
-      error = err.message || "Unbekannter Fehler beim Speichern.";
+      form = { date: "", withBuddy: false, buddyName: "", notes: "" };
+    } catch (e) {
+      errorMsg = e?.message ?? "Fehler beim Speichern.";
     }
   }
 
   async function deleteTraining(id) {
-    error = "";
+    if (!session?.userId) return;
+
+    errorMsg = "";
 
     try {
-      const res = await fetch(`/api/trainings/${id}`, {
+      const res = await fetch(`/api/trainings/${encodeURIComponent(id)}?userId=${encodeURIComponent(session.userId)}`, {
         method: "DELETE"
       });
-      if (!res.ok) {
-        throw new Error("Fehler beim Löschen des Trainings.");
-      }
-      trainings = trainings.filter((t) => t.id !== id);
-      updateStats();
-    } catch (err) {
-      console.error(err);
-      error = err.message || "Unbekannter Fehler beim Löschen.";
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? "Fehler beim Loeschen.");
+
+      trainings = trainings.filter((t) => String(t._id) !== String(id));
+      if (data?.summary) summary = data.summary;
+    } catch (e) {
+      errorMsg = e?.message ?? "Fehler beim Loeschen.";
     }
   }
+
+  onMount(() => {
+    session = readSession();
+    isAuthenticated = !!session?.userId;
+
+    if (session?.userId) loadTrainings(session.userId);
+
+    const unsub = onSessionChange((s) => {
+      session = s;
+      isAuthenticated = !!s?.userId;
+      if (s?.userId) loadTrainings(s.userId);
+      else {
+        trainings = [];
+        summary = { xp: 0, level: 1, trainingsCount: 0 };
+      }
+    });
+
+    return () => unsub();
+  });
 </script>
 
-<h1>Trainings erfassen</h1>
+<h1 class="mb-3">Trainings erfassen</h1>
 
 {#if !isAuthenticated}
-  <div class="alert alert-warning mt-3">
+  <div class="alert alert-warning">
     Bitte melde dich an, um Trainings zu erfassen und XP zu sammeln.
   </div>
-  <a href="/profile" class="btn btn-primary mt-2">Zur Anmeldung</a>
+  <a class="btn btn-primary" href="/profile">Zur Anmeldung</a>
 {:else}
-  {#if error}
-    <div class="alert alert-danger mt-3">
-      {error}
-    </div>
+  {#if errorMsg}
+    <div class="alert alert-danger">{errorMsg}</div>
   {/if}
 
-  <form class="mt-3" onsubmit={handleSubmit}>
-    <div class="row g-3">
-      <div class="col-md-4">
-        <label class="form-label" for="date">Datum</label>
-        <input
-          id="date"
-          type="date"
-          class="form-control"
-          bind:value={form.date}
-          required
-        />
-      </div>
+  <div class="row g-4">
+    <div class="col-lg-7">
+      <div class="card p-3">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label" for="t-date">Datum</label>
+            <input id="t-date" class="form-control" type="date" bind:value={form.date} />
+          </div>
 
-      <div class="col-md-4">
-        <p class="form-label d-block mb-1">Training mit Buddy?</p>
-        <div class="form-check form-switch">
-          <input
-            class="form-check-input"
-            type="checkbox"
-            id="withBuddy"
-            bind:checked={form.withBuddy}
-          />
-          <label class="form-check-label" for="withBuddy">
-            Ja, Training mit GymBuddy
-          </label>
+          <div class="col-md-6 d-flex align-items-end">
+            <div class="form-check form-switch">
+              <input id="t-buddy" class="form-check-input" type="checkbox" bind:checked={form.withBuddy} />
+              <label class="form-check-label" for="t-buddy">Training mit Buddy?</label>
+            </div>
+          </div>
+
+          {#if form.withBuddy}
+            <div class="col-md-12">
+              <label class="form-label" for="t-buddyName">Buddy Name</label>
+              <input id="t-buddyName" class="form-control" bind:value={form.buddyName} />
+            </div>
+          {/if}
+
+          <div class="col-12">
+            <label class="form-label" for="t-notes">Notizen (optional)</label>
+            <textarea id="t-notes" class="form-control" rows="3" bind:value={form.notes}></textarea>
+          </div>
+
+          <div class="col-12">
+            <button class="btn btn-primary" type="button" onclick={saveTraining}>
+              Training speichern
+            </button>
+          </div>
         </div>
       </div>
 
-      {#if form.withBuddy}
-        <div class="col-md-4">
-          <label class="form-label" for="buddyName">Name des Buddies</label>
-          <input
-            id="buddyName"
-            type="text"
-            class="form-control"
-            placeholder="z.B. Lena"
-            bind:value={form.buddyName}
-            required
-          />
-        </div>
-      {/if}
+      <div class="mt-4">
+        <h3 class="h5">Letzte Trainings</h3>
 
-      <div class="col-12">
-        <label class="form-label" for="notes">Notizen (optional)</label>
-        <textarea
-          id="notes"
-          class="form-control"
-          rows="2"
-          placeholder="z.B. PR im Kreuzheben, Technik verbessert..."
-          bind:value={form.notes}
-        ></textarea>
-      </div>
-    </div>
-
-    <button type="submit" class="btn btn-primary mt-3">
-      Training speichern
-    </button>
-  </form>
-
-  <div class="row mt-4 g-3">
-    <div class="col-md-4">
-      <div class="card shadow-sm">
-        <div class="card-body">
-          <h5 class="card-title">Dein Fortschritt</h5>
-          <p class="mb-1"><strong>Level:</strong> {stats.level}</p>
-          <p class="mb-1"><strong>XP:</strong> {stats.xp}</p>
-          <p class="mb-1">
-            <strong>Trainings gesamt:</strong> {stats.soloCount + stats.buddyCount}
-          </p>
-          <p class="mb-0 text-muted small">
-            10 XP pro Training allein, 20 XP mit Buddy, 30 XP für Profil.
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <div class="col-md-8">
-      <h2 class="h5 mb-3">
         {#if loading}
-          Trainings werden geladen...
+          <div class="text-muted">Laedt...</div>
         {:else}
-          Letzte Trainings
-        {/if}
-      </h2>
+          {#if trainings.length === 0}
+            <div class="text-muted">Noch keine Trainings erfasst.</div>
+          {:else}
+            <div class="list-group">
+              {#each trainings as t}
+                <div class="list-group-item d-flex justify-content-between align-items-start">
+                  <div>
+                    <div class="fw-bold">{t.date || "Ohne Datum"}</div>
+                    <div class="text-muted small">
+                      {t.withBuddy ? `Mit Buddy: ${t.buddyName || ""}` : "Allein"} · +{t.xpGain} XP
+                    </div>
+                    {#if t.notes}
+                      <div class="mt-2">{t.notes}</div>
+                    {/if}
+                  </div>
 
-      {#if loading}
-        <p class="text-muted">Bitte warten...</p>
-      {:else if trainings.length === 0}
-        <p class="text-muted">Noch keine Trainings erfasst.</p>
-      {:else}
-        <ul class="list-group">
-          {#each trainings as t}
-            <li class="list-group-item d-flex justify-content-between align-items-start">
-              <div>
-                <div>
-                  <strong>{t.date}</strong>
-                  {#if t.withBuddy}
-                    – mit {t.buddyName}
-                  {:else}
-                    – solo
-                  {/if}
+                  <button class="btn btn-outline-danger btn-sm" type="button" onclick={() => deleteTraining(t._id)}>
+                    Loeschen
+                  </button>
                 </div>
-                {#if t.notes}
-                  <div class="text-muted small">{t.notes}</div>
-                {/if}
-              </div>
-              <button
-                type="button"
-                class="btn btn-sm btn-outline-danger"
-                onclick={() => deleteTraining(t.id)}
-              >
-                Löschen
-              </button>
-            </li>
-          {/each}
-        </ul>
-      {/if}
+              {/each}
+            </div>
+          {/if}
+        {/if}
+      </div>
+    </div>
+
+    <div class="col-lg-5">
+      <div class="card p-3">
+        <div class="fw-bold mb-2">Dein Fortschritt</div>
+        <div><b>Level:</b> {summary.level}</div>
+        <div><b>XP:</b> {summary.xp}</div>
+        <div><b>Trainings gesamt:</b> {summary.trainingsCount}</div>
+        <div class="text-muted small mt-2">
+          10 XP pro Training allein, 20 XP mit Buddy, 30 XP fuer Profil.
+        </div>
+      </div>
     </div>
   </div>
 {/if}

@@ -1,46 +1,52 @@
-// src/routes/api/friends/remove/+server.js
 import { json } from "@sveltejs/kit";
 import { ObjectId } from "mongodb";
 import { getDb } from "$lib/server/mongo.js";
 
-function toObjectId(id) {
+function toObjectIdOrNull(id) {
   try {
-    return new ObjectId(String(id));
+    return new ObjectId(id);
   } catch {
     return null;
   }
 }
 
 export async function POST({ request }) {
-  const body = await request.json();
+  const body = await request.json().catch(() => null);
+  if (!body) return json({ error: "invalid json" }, { status: 400 });
 
-  const currentUserId = body?.currentUserId ?? body?.userId ?? "";
-  const otherUserId = body?.otherUserId ?? body?.targetId ?? "";
+  const userId = String(body.userId ?? "").trim();
+  const targetId = String(body.targetId ?? "").trim();
 
-  if (!currentUserId || !otherUserId) {
-    return json({ error: "invalid ids" }, { status: 400 });
-  }
+  if (!userId || !targetId) return json({ error: "missing ids" }, { status: 400 });
 
-  const curObj = toObjectId(currentUserId);
-  const otherObj = toObjectId(otherUserId);
-  if (!curObj || !otherObj) return json({ error: "invalid ids" }, { status: 400 });
-
-  const curStr = curObj.toString();
-  const otherStr = otherObj.toString();
+  const uOid = toObjectIdOrNull(userId);
+  const tOid = toObjectIdOrNull(targetId);
+  if (!uOid || !tOid) return json({ error: "invalid ids" }, { status: 400 });
 
   const db = await getDb();
   const users = db.collection("users");
 
-  await Promise.all([
-    users.updateOne(
-      { _id: curObj },
-      { $pull: { friends: otherStr, friendRequestsIn: otherStr, friendRequestsOut: otherStr } }
-    ),
-    users.updateOne(
-      { _id: otherObj },
-      { $pull: { friends: curStr, friendRequestsIn: curStr, friendRequestsOut: curStr } }
-    )
-  ]);
+  await users.updateOne(
+    { _id: uOid },
+    {
+      $pull: {
+        friends: targetId,
+        friendRequestsIn: targetId,
+        friendRequestsOut: targetId
+      }
+    }
+  );
+
+  await users.updateOne(
+    { _id: tOid },
+    {
+      $pull: {
+        friends: userId,
+        friendRequestsIn: userId,
+        friendRequestsOut: userId
+      }
+    }
+  );
 
   return json({ ok: true });
 }

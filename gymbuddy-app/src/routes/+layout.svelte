@@ -1,91 +1,70 @@
 <script>
   import "../styles.css";
   import { onMount } from "svelte";
-
-  import { readSession, clearSession } from "$lib/session.js";
+  import { goto } from "$app/navigation";
+  import { readSession, onSessionChange, clearSession } from "$lib/session.js";
 
   let { children } = $props();
+
+  let session = $state(null);
   let isAuthenticated = $state(false);
 
-  function refreshAuth() {
-    const s = readSession();
-    isAuthenticated = !!s?.userId;
-  }
-
   onMount(() => {
-    refreshAuth();
+    session = readSession();
+    isAuthenticated = !!session?.userId;
 
-    const onChanged = () => refreshAuth();
-    window.addEventListener("gymbuddy-session-changed", onChanged);
-    window.addEventListener("storage", onChanged);
+    const unsub = onSessionChange((s) => {
+      session = s;
+      isAuthenticated = !!s?.userId;
+    });
 
-    return () => {
-      window.removeEventListener("gymbuddy-session-changed", onChanged);
-      window.removeEventListener("storage", onChanged);
-    };
+    return () => unsub();
   });
 
   function logout() {
     clearSession();
-    isAuthenticated = false;
-    window.location.href = "/profile";
+    goto("/");
   }
 </script>
 
-<div class="container py-3">
-  <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4 rounded shadow-sm">
-    <div class="container-fluid">
-      <a class="navbar-brand d-flex align-items-center" href="/">
-        <img src="/img1.png" alt="GymBuddy Logo" width="96" height="96" />
-      </a>
+<nav class="navbar navbar-expand-lg bg-white shadow-sm">
+  <div class="container">
+    <a class="navbar-brand d-flex align-items-center gap-2" href="/">
+      <img src="/img1.png" alt="GymBuddy Logo" width="96" height="96" />
+    </a>
 
-      <button
-        class="navbar-toggler"
-        type="button"
-        data-bs-toggle="collapse"
-        data-bs-target="#navbarNav"
-        aria-controls="navbarNav"
-        aria-expanded="false"
-        aria-label="Toggle navigation"
-      >
-        <span class="navbar-toggler-icon"></span>
-      </button>
+    <button
+      class="navbar-toggler"
+      type="button"
+      data-bs-toggle="collapse"
+      data-bs-target="#navbarNav"
+      aria-controls="navbarNav"
+      aria-expanded="false"
+      aria-label="Toggle navigation"
+    >
+      <span class="navbar-toggler-icon"></span>
+    </button>
 
-      <div class="collapse navbar-collapse" id="navbarNav">
-        <ul class="navbar-nav ms-auto gap-2">
-          <li class="nav-item">
-            <a class="nav-link" href="/">Start</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/buddies">Gymbuddies</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/training">Trainings</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/compare">Vergleich</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/profile">Mein Profil</a>
-          </li>
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-3">
+        <li class="nav-item"><a class="nav-link" href="/">Start</a></li>
+        <li class="nav-item"><a class="nav-link" href="/buddies">Gymbuddies</a></li>
+        <li class="nav-item"><a class="nav-link" href="/training">Trainings</a></li>
+        <li class="nav-item"><a class="nav-link" href="/compare">Vergleich</a></li>
+        <li class="nav-item"><a class="nav-link" href="/profile">Mein Profil</a></li>
 
-          {#if isAuthenticated}
-            <li class="nav-item">
-              <button type="button" class="btn btn-outline-danger btn-sm ms-2" onclick={logout}>
-                Abmelden
-              </button>
-            </li>
-          {:else}
-            <li class="nav-item">
-              <a class="btn btn-primary btn-sm ms-2" href="/profile">
-                Anmelden
-              </a>
-            </li>
-          {/if}
-        </ul>
-      </div>
+        {#if isAuthenticated}
+          <li class="nav-item">
+            <button class="btn btn-outline-danger btn-sm" type="button" onclick={logout}>
+              Abmelden
+            </button>
+          </li>
+        {/if}
+      </ul>
     </div>
-  </nav>
+  </div>
+</nav>
 
+<main class="container py-4">
   {@render children()}
-</div>
+</main>

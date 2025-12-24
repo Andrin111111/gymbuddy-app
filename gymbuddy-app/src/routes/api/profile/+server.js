@@ -1,126 +1,143 @@
-// src/routes/api/profile/+server.js
 import { json } from "@sveltejs/kit";
 import { ObjectId } from "mongodb";
 import { getDb } from "$lib/server/mongo.js";
-import { isProfileComplete, XP_PROFILE_BONUS } from "$lib/gamification.js";
+import { isProfileComplete, XP_PROFILE_BONUS, calculateLevel } from "$lib/gamification.js";
 
-function toObjectId(id) {
+function toObjectIdOrNull(id) {
   try {
-    return new ObjectId(String(id));
+    return new ObjectId(id);
   } catch {
     return null;
   }
 }
 
-function buildProfileFromUser(user) {
-  const p = user?.profile ?? {};
-
-  const code =
-    String(p.code ?? user?.buddyCode ?? user?.gymBuddyId ?? user?.gymBuddyId ?? "").trim();
-
+function pickProfileFromUser(u) {
+  const p = u?.profile ?? {};
   return {
-    name: String(p.name ?? user?.name ?? "").trim(),
-    gym: String(p.gym ?? user?.gym ?? "").trim(),
-    level: String(p.level ?? user?.level ?? user?.trainingLevel ?? "beginner").trim(),
-    goals: String(p.goals ?? user?.goals ?? "").trim(),
-    trainingTimes: String(p.trainingTimes ?? user?.trainingTimes ?? user?.preferredTimes ?? "").trim(),
-    contact: String(p.contact ?? user?.contact ?? "").trim(),
-    code
+    name: String(p.name ?? u?.name ?? "").trim(),
+    gym: String(p.gym ?? u?.gym ?? "").trim(),
+    trainingLevel: String(p.trainingLevel ?? u?.trainingLevel ?? p.level ?? u?.level ?? "").trim(),
+    goals: String(p.goals ?? u?.goals ?? "").trim(),
+    preferredTimes: String(p.preferredTimes ?? u?.preferredTimes ?? p.trainingTimes ?? u?.trainingTimes ?? "").trim(),
+    contact: String(p.contact ?? u?.contact ?? "").trim()
   };
+}
+
+function getBuddyCode(u) {
+  return String(
+    u?.buddyCode ??
+      u?.gymBuddyId ??
+      u?.gymBuddyCode ??
+      u?.buddyId ??
+      u?.code ??
+      ""
+  );
 }
 
 export async function GET({ url }) {
   const userId = url.searchParams.get("userId");
-  if (!userId) return json({ error: "userId missing" }, { status: 400 });
-
-  const _id = toObjectId(userId);
-  if (!_id) return json({ error: "invalid userId" }, { status: 400 });
+  if (!userId) {
+    return json({ error: "missing userId" }, { status: 400 });
+  }
 
   const db = await getDb();
   const users = db.collection("users");
 
-  const user = await users.findOne({ _id }, { projection: { password: 0 } });
-  if (!user) return json({ error: "User not found" }, { status: 404 });
+  const oid = toObjectIdOrNull(userId);
 
-  const profile = buildProfileFromUser(user);
+  let user = null;
+  if (oid) user = await users.findOne({ _id: oid });
+  if (!user) user = await users.findOne({ _id: userId });
+
+  if (!user) {
+    return json({ error: "user not found" }, { status: 404 });
+  }
+
+  const profile = pickProfileFromUser(user);
+  const xp = Number(user.xp ?? 0);
 
   return json({
+    userId: String(user._id),
+    email: user.email ?? "",
+    buddyCode: getBuddyCode(user),
     profile,
-    xp: Number(user.xp ?? 0),
+    xp,
     trainingsCount: Number(user.trainingsCount ?? 0),
-    profileBonusApplied: user.profileBonusApplied === true || user.profileBonusGranted === true
+    profileBonusApplied: Boolean(user.profileBonusApplied ?? user.profileBonusGranted ?? false),
+    level: calculateLevel(xp)
   });
 }
 
 export async function PUT({ request }) {
-  const body = await request.json();
+  const body = await request.json().catch(() => null);
+  if (!body) return json({ error: "invalid json" }, { status: 400 });
 
-  const userId = body?.userId;
-  const updates = body?.profileUpdates ?? body?.profile ?? {};
+  const userId = body.userId;
+  const updates = body.profileUpdates ?? body.profile ?? body;
 
-  if (!userId) return json({ error: "userId missing" }, { status: 400 });
+  if (!userId) return json({ error: "missing userId" }, { status: 400 });
 
-  const _id = toObjectId(userId);
-  if (!_id) return json({ error: "invalid userId" }, { status: 400 });
+  const oid = toObjectIdOrNull(userId);
+  if (!oid) return json({ error: "invalid userId" }, { status: 400 });
+
+  const profileDoc = {
+    name: String(updates?.name ?? "").trim(),
+    gym: String(updates?.gym ?? "").trim(),
+    trainingLevel: String(updates?.trainingLevel ?? updates?.level ?? "").trim(),
+    goals: String(updates?.goals ?? "").trim(),
+    preferredTimes: String(updates?.preferredTimes ?? updates?.trainingTimes ?? "").trim(),
+    contact: String(updates?.contact ?? "").trim()
+  };
 
   const db = await getDb();
   const users = db.collection("users");
 
-  const user = await users.findOne({ _id });
-  if (!user) return json({ error: "User not found" }, { status: 404 });
+  const now = new Date();
 
-  const existingProfile = buildProfileFromUser(user);
-
-  const mergedProfile = {
-    ...existingProfile,
-    name: String(updates.name ?? existingProfile.name).trim(),
-    gym: String(updates.gym ?? existingProfile.gym).trim(),
-    level: String(updates.level ?? existingProfile.level).trim(),
-    goals: String(updates.goals ?? existingProfile.goals).trim(),
-    trainingTimes: String(updates.trainingTimes ?? updates.preferredTimes ?? existingProfile.trainingTimes).trim(),
-    contact: String(updates.contact ?? existingProfile.contact).trim(),
-    code: existingProfile.code
-  };
-
-  const completeNow = isProfileComplete(mergedProfile);
-  const bonusAlready =
-    user.profileBonusApplied === true || user.profileBonusGranted === true;
-
-  const update = {
-    $set: {
-      profile: mergedProfile,
-      name: mergedProfile.name,
-      gym: mergedProfile.gym,
-      level: mergedProfile.level,
-      goals: mergedProfile.goals,
-      trainingTimes: mergedProfile.trainingTimes,
-      preferredTimes: mergedProfile.trainingTimes,
-      contact: mergedProfile.contact,
-      updatedAt: new Date()
+  const updateRes = await users.updateOne(
+    { _id: oid },
+    {
+      $set: {
+        name: profileDoc.name,
+        gym: profileDoc.gym,
+        trainingLevel: profileDoc.trainingLevel,
+        goals: profileDoc.goals,
+        preferredTimes: profileDoc.preferredTimes,
+        contact: profileDoc.contact,
+        profile: profileDoc,
+        updatedAt: now
+      }
     }
-  };
+  );
 
-  if (completeNow && !bonusAlready) {
-    update.$inc = { xp: XP_PROFILE_BONUS };
-    update.$set.profileBonusApplied = true;
-    update.$set.profileBonusGranted = true;
+  if (updateRes.matchedCount === 0) {
+    return json({ error: "user not found" }, { status: 404 });
   }
 
-  const { value: updated } = await users.findOneAndUpdate(
-    { _id },
-    update,
-    { returnDocument: "after" }
-  );
+  const complete = isProfileComplete(profileDoc);
+
+  if (complete) {
+    await users.updateOne(
+      { _id: oid, profileBonusApplied: { $ne: true } },
+      {
+        $inc: { xp: XP_PROFILE_BONUS },
+        $set: { profileBonusApplied: true, profileBonusGranted: true, updatedAt: now }
+      }
+    );
+  }
+
+  const user = await users.findOne({ _id: oid });
+  const profile = pickProfileFromUser(user);
+  const xp = Number(user?.xp ?? 0);
 
   return json({
     ok: true,
-    profile: buildProfileFromUser(updated),
-    xp: Number(updated?.xp ?? 0),
-    trainingsCount: Number(updated?.trainingsCount ?? 0),
-    profileBonusApplied: updated?.profileBonusApplied === true || updated?.profileBonusGranted === true
+    userId: String(user?._id ?? userId),
+    buddyCode: getBuddyCode(user),
+    profile,
+    xp,
+    trainingsCount: Number(user?.trainingsCount ?? 0),
+    profileBonusApplied: Boolean(user?.profileBonusApplied ?? user?.profileBonusGranted ?? false),
+    level: calculateLevel(xp)
   });
-}
-
-export async function POST(event) {
-  return PUT(event);
 }
