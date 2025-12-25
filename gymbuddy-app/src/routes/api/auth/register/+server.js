@@ -1,18 +1,31 @@
 // src/routes/api/auth/register/+server.js
 import { json } from "@sveltejs/kit";
+import { z } from "zod";
 import { getDb } from "$lib/server/mongo";
 import { hashPassword } from "$lib/server/security";
 import { randomBuddyCode } from "$lib/server/ids";
+import { createSession, setSessionCookie } from "$lib/server/sessions.js";
+import { rateLimit } from "$lib/server/rateLimit.js";
 
-export async function POST({ request }) {
+const registerSchema = z.object({
+  email: z.string().trim().toLowerCase().email(),
+  password: z.string().min(6)
+});
+
+export async function POST({ request, cookies }) {
   try {
     const body = await request.json();
-    const email = String(body?.email ?? "").trim().toLowerCase();
-    const password = String(body?.password ?? "");
-
-    if (!email || !password) {
+    const parsed = registerSchema.safeParse(body);
+    if (!parsed.success) {
       return json({ error: "E-Mail und Passwort sind erforderlich." }, { status: 400 });
     }
+    const { email, password } = parsed.data;
+
+    const ip = request.headers.get("x-forwarded-for") || "ip-unknown";
+    if (!rateLimit(`register:ip:${ip}`, 5, 60 * 60 * 1000)) {
+      return json({ error: "Zu viele Registrierungen. Bitte spaeter versuchen." }, { status: 429 });
+    }
+
 
     const db = await getDb();
     const users = db.collection("users");
@@ -54,11 +67,12 @@ export async function POST({ request }) {
 
     const result = await users.insertOne(doc);
 
-    return json({
-      userId: result.insertedId.toString(),
-      email,
-      buddyCode
-    });
+    const userId = result.insertedId.toString();
+
+    const session = await createSession(userId);
+    setSessionCookie(cookies, session.token, session.expiresAt);
+
+    return json({ userId, email, buddyCode });
   } catch (err) {
     console.error(err);
     return json({ error: "Registrierung fehlgeschlagen." }, { status: 500 });

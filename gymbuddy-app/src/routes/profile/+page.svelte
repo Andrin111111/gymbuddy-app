@@ -1,6 +1,6 @@
 <script>
   import { onMount } from "svelte";
-  import { readSession, writeSession, clearSession, subscribeSession } from "$lib/session.js";
+  import { readSession, writeSession, clearSession, subscribeSession, refreshSession, csrfHeader } from "$lib/session.js";
 
   let session = $state(readSession());
   let isAuthenticated = $derived(!!session?.userId);
@@ -31,26 +31,27 @@
   }
 
   async function loadProfile() {
-    if (!session?.userId) return;
     setError("");
     loading = true;
     try {
-      const res = await fetch(`/api/profile?userId=${encodeURIComponent(session.userId)}`);
+      const res = await fetch("/api/profile");
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Profil konnte nicht geladen werden.");
 
-      buddyCode = data?.buddyCode ?? "";
-      name = data?.name ?? "";
-      gym = data?.gym ?? "";
-      trainingLevel = data?.trainingLevel ?? "beginner";
-      goals = data?.goals ?? "";
-      preferredTimes = data?.preferredTimes ?? "";
-      contact = data?.contact ?? "";
+      const profile = data?.profile ?? data;
 
-      xp = data?.xp ?? 0;
-      level = data?.level ?? 1;
-      trainingsCount = data?.trainingsCount ?? 0;
-      profileBonusApplied = !!data?.profileBonusApplied;
+      buddyCode = data?.buddyCode ?? profile?.buddyCode ?? "";
+      name = profile?.name ?? "";
+      gym = profile?.gym ?? "";
+      trainingLevel = profile?.trainingLevel ?? "beginner";
+      goals = profile?.goals ?? "";
+      preferredTimes = profile?.preferredTimes ?? "";
+      contact = profile?.contact ?? "";
+
+      xp = data?.xp ?? profile?.xp ?? 0;
+      level = data?.level ?? profile?.level ?? 1;
+      trainingsCount = data?.trainingsCount ?? profile?.trainingsCount ?? 0;
+      profileBonusApplied = !!(data?.profileBonusApplied ?? profile?.profileBonusApplied);
     } catch (e) {
       setError(e?.message || "Profil konnte nicht geladen werden.");
     } finally {
@@ -61,15 +62,15 @@
   async function doRegister() {
     setError("");
 
-    if (!email.trim() || !password) return setError("Bitte E-Mail und Passwort ausfüllen.");
+    if (!email.trim() || !password) return setError("Bitte E-Mail und Passwort ausfuellen.");
     if (password.length < 6) return setError("Passwort muss mindestens 6 Zeichen haben.");
-    if (password !== password2) return setError("Passwörter stimmen nicht überein.");
+    if (password !== password2) return setError("Passwoerter stimmen nicht ueberein.");
 
     loading = true;
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...csrfHeader() },
         body: JSON.stringify({ email: email.trim(), password })
       });
 
@@ -77,6 +78,7 @@
       if (!res.ok) throw new Error(data?.error || "Registrierung fehlgeschlagen.");
 
       writeSession({ userId: data.userId, email: data.email, buddyCode: data.buddyCode });
+      await refreshSession();
       session = readSession();
       mode = "profile";
       await loadProfile();
@@ -90,13 +92,13 @@
   async function doLogin() {
     setError("");
 
-    if (!email.trim() || !password) return setError("Bitte E-Mail und Passwort ausfüllen.");
+    if (!email.trim() || !password) return setError("Bitte E-Mail und Passwort ausfuellen.");
 
     loading = true;
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...csrfHeader() },
         body: JSON.stringify({ email: email.trim(), password })
       });
 
@@ -104,6 +106,7 @@
       if (!res.ok) throw new Error(data?.error || "Login fehlgeschlagen.");
 
       writeSession({ userId: data.userId, email: data.email, buddyCode: data.buddyCode });
+      await refreshSession();
       session = readSession();
       mode = "profile";
       await loadProfile();
@@ -115,16 +118,13 @@
   }
 
   async function saveProfile() {
-    if (!session?.userId) return;
-
     setError("");
     loading = true;
     try {
       const res = await fetch("/api/profile", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...csrfHeader() },
         body: JSON.stringify({
-          userId: session.userId,
           name,
           gym,
           trainingLevel,
@@ -137,10 +137,12 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Profil konnte nicht gespeichert werden.");
 
-      xp = data?.xp ?? xp;
-      level = data?.level ?? level;
-      trainingsCount = data?.trainingsCount ?? trainingsCount;
-      profileBonusApplied = !!data?.profileBonusApplied;
+      const profile = data?.profile ?? data;
+
+      xp = data?.xp ?? profile?.xp ?? xp;
+      level = data?.level ?? profile?.level ?? level;
+      trainingsCount = data?.trainingsCount ?? profile?.trainingsCount ?? trainingsCount;
+      profileBonusApplied = !!(data?.profileBonusApplied ?? profile?.profileBonusApplied);
     } catch (e) {
       setError(e?.message || "Profil konnte nicht gespeichert werden.");
     } finally {
@@ -149,28 +151,23 @@
   }
 
   async function deleteAccount() {
-    if (!session?.userId) return;
-
-    const ok = confirm("Account wirklich löschen?");
+    const ok = confirm("Account wirklich loeschen?");
     if (!ok) return;
 
     setError("");
     loading = true;
     try {
-      const res = await fetch("/api/auth/delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: session.userId })
-      });
+      const res = await fetch("/api/auth/delete", { method: "POST", headers: { ...csrfHeader() } });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Account konnte nicht gelöscht werden.");
+      if (!res.ok) throw new Error(data?.error || "Account konnte nicht geloescht werden.");
 
       clearSession();
+      await refreshSession();
       session = readSession();
       mode = "login";
     } catch (e) {
-      setError(e?.message || "Account konnte nicht gelöscht werden.");
+      setError(e?.message || "Account konnte nicht geloescht werden.");
     } finally {
       loading = false;
     }
@@ -292,12 +289,12 @@
             Profil speichern
           </button>
           <button class="btn btn-outline-danger" type="button" onclick={deleteAccount} disabled={loading}>
-            Account löschen
+            Account loeschen
           </button>
         </div>
 
         <div class="alert alert-info mt-4">
-          Für ein vollständig ausgefülltes Profil erhältst du einmalig 30 XP.
+          Fuer ein vollstaendig ausgefuelltes Profil erhaeltst du einmalig 30 XP.
           {#if profileBonusApplied}
             <div class="mt-2"><strong>Bonus wurde bereits gutgeschrieben.</strong></div>
           {/if}
@@ -310,4 +307,3 @@
     </div>
   {/if}
 </div>
-

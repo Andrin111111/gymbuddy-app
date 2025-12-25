@@ -11,54 +11,43 @@ function toObjectIdOrNull(id) {
   }
 }
 
-export async function DELETE({ params, url }) {
+export async function DELETE({ params, locals }) {
+  if (!locals.userId) return json({ error: "unauthorized" }, { status: 401 });
+
   const trainingId = params.id;
-  const userId = url.searchParams.get("userId");
-
-  if (!userId) return json({ error: "missing userId" }, { status: 400 });
-
   const trainingOid = toObjectIdOrNull(trainingId);
-  if (!trainingOid) return json({ error: "invalid training id" }, { status: 400 });
+  if (!trainingOid) return json({ error: "invalid id" }, { status: 400 });
 
-  const userOid = toObjectIdOrNull(userId);
-  if (!userOid) return json({ error: "invalid userId" }, { status: 400 });
-
+  const userId = String(locals.userId);
   const db = await getDb();
   const trainingsCol = db.collection("trainings");
   const usersCol = db.collection("users");
 
   const training = await trainingsCol.findOne({ _id: trainingOid, userId });
-  if (!training) return json({ error: "training not found" }, { status: 404 });
+  if (!training) return json({ error: "not found" }, { status: 404 });
 
   await trainingsCol.deleteOne({ _id: trainingOid, userId });
 
-  const xpGain = Number(training.xpGain ?? 0);
+  const xpGain = Number(training?.xpGain ?? 0);
+  const update = {
+    $inc: { trainingsCount: -1 },
+    $set: { updatedAt: new Date() }
+  };
 
-  await usersCol.updateOne(
-    { _id: userOid },
-    { $inc: { xp: -xpGain, trainingsCount: -1 }, $set: { updatedAt: new Date() } }
-  );
-
-  const user = await usersCol.findOne({ _id: userOid });
-  let xp = Number(user?.xp ?? 0);
-  let trainingsCount = Number(user?.trainingsCount ?? 0);
-
-  if (xp < 0 || trainingsCount < 0) {
-    xp = Math.max(0, xp);
-    trainingsCount = Math.max(0, trainingsCount);
-    await usersCol.updateOne(
-      { _id: userOid },
-      { $set: { xp, trainingsCount, updatedAt: new Date() } }
-    );
+  if (!Number.isNaN(xpGain) && xpGain > 0) {
+    update.$inc.xp = -xpGain;
   }
+
+  await usersCol.updateOne({ _id: toObjectIdOrNull(userId) ?? userId }, update);
+
+  const user = await usersCol.findOne({ _id: toObjectIdOrNull(userId) ?? userId });
+  const xp = Number(user?.xp ?? 0);
+  const trainingsCount = Number(user?.trainingsCount ?? 0);
 
   return json({
     ok: true,
-    summary: {
-      xp,
-      level: calculateLevel(xp),
-      trainingsCount
-    }
+    xp,
+    trainingsCount,
+    level: calculateLevel(xp)
   });
 }
-

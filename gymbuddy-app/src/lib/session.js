@@ -1,9 +1,9 @@
 // src/lib/session.js
 
-// Einheitlicher Session-Key (bitte ueberall verwenden)
+// Einheitlicher Session-Key (nur Client-Snapshot, echte Session liegt im Cookie/Server)
 export const SESSION_KEY = "GYMBUDDY-ATH";
 
-// Alte Keys (falls du vorher andere Keys hattest) automatisch migrieren
+// Legacy Keys (werden migriert/entfernt)
 const LEGACY_KEYS = [
   "gymbuddy-session",
   "gymbuddy-auth",
@@ -93,8 +93,40 @@ export function clearSession() {
   notifySessionChanged();
 }
 
+async function fetchServerSession() {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const res = await fetch("/api/auth/me", { method: "GET" });
+    if (!res.ok) {
+      clearSession();
+      return null;
+    }
+
+    const data = await res.json().catch(() => null);
+    if (data?.userId) {
+      const snapshot = {
+        userId: String(data.userId),
+        email: data.email ?? "",
+        buddyCode: data.buddyCode ?? ""
+      };
+      writeSession(snapshot);
+      return snapshot;
+    }
+
+    clearSession();
+    return null;
+  } catch {
+    return readSession();
+  }
+}
+
+export async function refreshSession() {
+  return fetchServerSession();
+}
+
 /**
- * Fuer Pages: callback sofort + bei Login/Logout updaten
+ * Fuer Pages: callback sofort + bei Login/Logout updaten, holt echten Status vom Server.
  */
 export function subscribeSession(callback) {
   if (typeof window === "undefined") return () => {};
@@ -112,6 +144,9 @@ export function subscribeSession(callback) {
   window.addEventListener("storage", onStorage);
 
   emit();
+  fetchServerSession().then((s) => {
+    if (s) emit();
+  });
 
   return () => {
     window.removeEventListener("gymbuddy-session-changed", onCustom);
@@ -121,3 +156,20 @@ export function subscribeSession(callback) {
 
 // Alias fuer bestehende Importe (altes Naming)
 export const onSessionChange = subscribeSession;
+
+function parseCookie(name) {
+  if (typeof document === "undefined") return null;
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop().split(";").shift() || null;
+  return null;
+}
+
+export function getCsrfToken() {
+  return parseCookie("gb_csrf");
+}
+
+export function csrfHeader() {
+  const token = getCsrfToken();
+  return token ? { "x-csrf-token": token } : {};
+}

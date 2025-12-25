@@ -1,7 +1,7 @@
 <script>
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { readSession, subscribeSession } from "$lib/session.js";
+  import { readSession, subscribeSession, csrfHeader } from "$lib/session.js";
 
   let session = $state(readSession());
   let isAuthenticated = $derived(!!session?.userId);
@@ -52,13 +52,11 @@
   }
 
   async function loadBuddies() {
-    if (!session?.userId) return;
-
     setError("");
     loading = true;
 
     try {
-      const res = await fetch(`/api/buddies?userId=${encodeURIComponent(session.userId)}`);
+      const res = await fetch("/api/buddies");
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Buddies konnten nicht geladen werden.");
 
@@ -97,16 +95,14 @@
   }
 
   async function sendRequest(targetId) {
-    if (!session?.userId) return;
-
     setError("");
     loading = true;
 
     try {
       const res = await fetch("/api/friends/request", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: session.userId, targetUserId: targetId })
+        headers: { "Content-Type": "application/json", ...csrfHeader() },
+        body: JSON.stringify({ targetUserId: targetId })
       });
 
       const data = await res.json().catch(() => ({}));
@@ -121,16 +117,14 @@
   }
 
   async function cancelRequest(targetId) {
-    if (!session?.userId) return;
-
     setError("");
     loading = true;
 
     try {
       const res = await fetch("/api/friends/cancel", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: session.userId, targetUserId: targetId })
+        headers: { "Content-Type": "application/json", ...csrfHeader() },
+        body: JSON.stringify({ targetUserId: targetId })
       });
 
       const data = await res.json().catch(() => ({}));
@@ -145,16 +139,14 @@
   }
 
   async function acceptRequest(fromId) {
-    if (!session?.userId) return;
-
     setError("");
     loading = true;
 
     try {
       const res = await fetch("/api/friends/accept", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: session.userId, fromUserId: fromId })
+        headers: { "Content-Type": "application/json", ...csrfHeader() },
+        body: JSON.stringify({ fromUserId: fromId })
       });
 
       const data = await res.json().catch(() => ({}));
@@ -169,16 +161,14 @@
   }
 
   async function declineRequest(fromId) {
-    if (!session?.userId) return;
-
     setError("");
     loading = true;
 
     try {
       const res = await fetch("/api/friends/decline", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: session.userId, fromUserId: fromId })
+        headers: { "Content-Type": "application/json", ...csrfHeader() },
+        body: JSON.stringify({ fromUserId: fromId })
       });
 
       const data = await res.json().catch(() => ({}));

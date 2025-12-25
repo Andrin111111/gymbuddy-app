@@ -1,7 +1,17 @@
 import { json } from "@sveltejs/kit";
 import { ObjectId } from "mongodb";
+import { z } from "zod";
 import { getDb } from "$lib/server/mongo.js";
 import { isProfileComplete, XP_PROFILE_BONUS, calculateLevel } from "$lib/gamification.js";
+
+const profileSchema = z.object({
+  name: z.string().max(120).trim().optional(),
+  gym: z.string().max(120).trim().optional(),
+  trainingLevel: z.string().trim().max(40).optional(),
+  goals: z.string().max(300).trim().optional(),
+  preferredTimes: z.string().max(200).trim().optional(),
+  contact: z.string().max(200).trim().optional()
+});
 
 function toObjectIdOrNull(id) {
   try {
@@ -34,51 +44,55 @@ function getBuddyCode(u) {
   );
 }
 
-export async function GET({ url }) {
-  const userId = url.searchParams.get("userId");
-  if (!userId) {
-    return json({ error: "missing userId" }, { status: 400 });
-  }
+function serializeProfile(user) {
+  const profile = pickProfileFromUser(user);
+  const xp = Number(user?.xp ?? 0);
+  const trainingsCount = Number(user?.trainingsCount ?? 0);
+  const level = calculateLevel(xp);
 
+  return {
+    userId: String(user?._id ?? ""),
+    email: user?.email ?? "",
+    buddyCode: getBuddyCode(user),
+    ...profile,
+    profile,
+    xp,
+    trainingsCount,
+    profileBonusApplied: Boolean(user?.profileBonusApplied ?? user?.profileBonusGranted ?? false),
+    level
+  };
+}
+
+export async function GET({ locals }) {
+  if (!locals.userId) return json({ error: "unauthorized" }, { status: 401 });
+
+  const oid = toObjectIdOrNull(locals.userId);
   const db = await getDb();
   const users = db.collection("users");
 
-  const oid = toObjectIdOrNull(userId);
-
-  let user = null;
-  if (oid) user = await users.findOne({ _id: oid });
-  if (!user) user = await users.findOne({ _id: userId });
+  const user = oid
+    ? await users.findOne({ _id: oid })
+    : await users.findOne({ _id: locals.userId });
 
   if (!user) {
     return json({ error: "user not found" }, { status: 404 });
   }
 
-  const profile = pickProfileFromUser(user);
-  const xp = Number(user.xp ?? 0);
-
-  return json({
-    userId: String(user._id),
-    email: user.email ?? "",
-    buddyCode: getBuddyCode(user),
-    profile,
-    xp,
-    trainingsCount: Number(user.trainingsCount ?? 0),
-    profileBonusApplied: Boolean(user.profileBonusApplied ?? user.profileBonusGranted ?? false),
-    level: calculateLevel(xp)
-  });
+  return json(serializeProfile(user));
 }
 
-export async function PUT({ request }) {
+export async function PUT({ locals, request }) {
+  if (!locals.userId) return json({ error: "unauthorized" }, { status: 401 });
+
   const body = await request.json().catch(() => null);
   if (!body) return json({ error: "invalid json" }, { status: 400 });
 
-  const userId = body.userId;
-  const updates = body.profileUpdates ?? body.profile ?? body;
-
-  if (!userId) return json({ error: "missing userId" }, { status: 400 });
-
-  const oid = toObjectIdOrNull(userId);
-  if (!oid) return json({ error: "invalid userId" }, { status: 400 });
+  const updatesRaw = body.profileUpdates ?? body.profile ?? body;
+  const parsed = profileSchema.safeParse(updatesRaw);
+  if (!parsed.success) {
+    return json({ error: "invalid profile data" }, { status: 400 });
+  }
+  const updates = parsed.data;
 
   const profileDoc = {
     name: String(updates?.name ?? "").trim(),
@@ -88,6 +102,9 @@ export async function PUT({ request }) {
     preferredTimes: String(updates?.preferredTimes ?? updates?.trainingTimes ?? "").trim(),
     contact: String(updates?.contact ?? "").trim()
   };
+
+  const oid = toObjectIdOrNull(locals.userId);
+  if (!oid) return json({ error: "invalid userId" }, { status: 400 });
 
   const db = await getDb();
   const users = db.collection("users");
@@ -127,17 +144,5 @@ export async function PUT({ request }) {
   }
 
   const user = await users.findOne({ _id: oid });
-  const profile = pickProfileFromUser(user);
-  const xp = Number(user?.xp ?? 0);
-
-  return json({
-    ok: true,
-    userId: String(user?._id ?? userId),
-    buddyCode: getBuddyCode(user),
-    profile,
-    xp,
-    trainingsCount: Number(user?.trainingsCount ?? 0),
-    profileBonusApplied: Boolean(user?.profileBonusApplied ?? user?.profileBonusGranted ?? false),
-    level: calculateLevel(xp)
-  });
+  return json(serializeProfile(user));
 }

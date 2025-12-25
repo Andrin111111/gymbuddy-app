@@ -17,13 +17,11 @@
   }
 
   async function loadCompareData() {
-    if (!session?.userId) return;
-
     setError("");
     loading = true;
 
     try {
-      const res = await fetch(`/api/buddies?userId=${encodeURIComponent(session.userId)}`);
+      const res = await fetch("/api/buddies");
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Vergleichsdaten konnten nicht geladen werden.");
 

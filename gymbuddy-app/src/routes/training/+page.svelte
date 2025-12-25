@@ -1,7 +1,7 @@
 <script>
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { readSession, subscribeSession } from "$lib/session.js";
+  import { readSession, subscribeSession, csrfHeader } from "$lib/session.js";
 
   let session = $state(readSession());
   let isAuthenticated = $derived(!!session?.userId);
@@ -32,22 +32,27 @@
   }
 
   async function loadTrainings() {
-    if (!session?.userId) return;
-
     setError("");
     loading = true;
 
     try {
-      const res = await fetch(`/api/trainings?userId=${encodeURIComponent(session.userId)}`);
+      const res = await fetch("/api/trainings");
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) throw new Error(data?.error || "Fehler beim Laden der Trainings.");
 
       trainings = Array.isArray(data?.trainings) ? data.trainings : Array.isArray(data) ? data : [];
 
+      const summary = data?.summary ?? {};
+
       if (typeof data?.xp === "number") xp = data.xp;
+      else if (typeof summary?.xp === "number") xp = summary.xp;
+
       if (typeof data?.level === "number") level = data.level;
+      else if (typeof summary?.level === "number") level = summary.level;
+
       if (typeof data?.trainingsCount === "number") trainingsCount = data.trainingsCount;
+      else if (typeof summary?.trainingsCount === "number") trainingsCount = summary.trainingsCount;
     } catch (e) {
       setError(e?.message || "Fehler beim Laden der Trainings.");
       trainings = [];
@@ -60,14 +65,11 @@
   }
 
   async function saveTraining() {
-    if (!session?.userId) return;
-
     setError("");
     loading = true;
 
     try {
       const payload = {
-        userId: session.userId,
         date,
         withBuddy,
         buddyName: withBuddy ? buddyName : "",
@@ -76,7 +78,7 @@
 
       const res = await fetch("/api/trainings", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...csrfHeader() },
         body: JSON.stringify(payload)
       });
 
@@ -94,6 +96,10 @@
       buddyName = "";
       notes = "";
 
+      xp = data?.xp ?? xp;
+      level = data?.level ?? level;
+      trainingsCount = data?.trainingsCount ?? trainingsCount;
+
       await loadTrainings();
     } catch (e) {
       setError(e?.message || "Training konnte nicht gespeichert werden.");
@@ -103,25 +109,28 @@
   }
 
   async function deleteTraining(id) {
-    if (!session?.userId) return;
-
-    const ok = confirm("Training wirklich löschen?");
+    const ok = confirm("Training wirklich loeschen?");
     if (!ok) return;
 
     setError("");
     loading = true;
 
     try {
-      const res = await fetch(`/api/trainings/${encodeURIComponent(id)}?userId=${encodeURIComponent(session.userId)}`, {
-        method: "DELETE"
+      const res = await fetch(`/api/trainings/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: { ...csrfHeader() }
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Training konnte nicht gelöscht werden.");
+      if (!res.ok) throw new Error(data?.error || "Training konnte nicht geloescht werden.");
+
+      xp = data?.xp ?? xp;
+      level = data?.level ?? level;
+      trainingsCount = data?.trainingsCount ?? trainingsCount;
 
       await loadTrainings();
     } catch (e) {
-      setError(e?.message || "Training konnte nicht gelöscht werden.");
+      setError(e?.message || "Training konnte nicht geloescht werden.");
     } finally {
       loading = false;
     }
@@ -223,7 +232,7 @@
             <div><strong>XP:</strong> {xp}</div>
             <div><strong>Trainings gesamt:</strong> {trainingsCount}</div>
             <div class="text-muted mt-2">
-              10 XP pro Training allein, 20 XP mit Buddy, 30 XP für Profil.
+              10 XP pro Training allein, 20 XP mit Buddy, 30 XP fuer Profil.
             </div>
           </div>
         </div>
@@ -267,7 +276,7 @@
                       onclick={() => deleteTraining(t._id || t.id)}
                       disabled={loading}
                     >
-                      Löschen
+                      Loeschen
                     </button>
                   </div>
                 {/each}

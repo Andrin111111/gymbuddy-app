@@ -2,7 +2,7 @@
   import "../styles.css";
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { readSession, subscribeSession, clearSession } from "$lib/session.js";
+  import { readSession, subscribeSession, clearSession, refreshSession, csrfHeader } from "$lib/session.js";
 
   let { children } = $props();
 
@@ -21,8 +21,12 @@
     return () => unsub();
   });
 
-  function logout() {
+  async function logout() {
+    try {
+      await fetch("/api/auth/logout", { method: "POST", headers: { ...csrfHeader() } });
+    } catch {}
     clearSession();
+    await refreshSession();
     goto("/");
   }
 </script>

@@ -1,25 +1,20 @@
 // src/lib/server/mongo.js
 import { MongoClient } from "mongodb";
-import { env } from "$env/dynamic/private";
+import { getEnv } from "./env.js";
 
 let client;
 let db;
 
 export async function getDb() {
-  const uri = env.MONGODB_URI;
-  if (!uri) {
-    throw new Error(
-      "MONGODB_URI ist nicht gesetzt. Bitte als Netlify Environment Variable konfigurieren."
-    );
-  }
+  const { MONGODB_URI, MONGODB_DB_NAME } = getEnv();
 
   if (!client) {
-    client = new MongoClient(uri);
+    client = new MongoClient(MONGODB_URI);
   }
 
   if (!db) {
     await client.connect();
-    db = client.db();
+    db = client.db(MONGODB_DB_NAME);
   }
 
   return db;

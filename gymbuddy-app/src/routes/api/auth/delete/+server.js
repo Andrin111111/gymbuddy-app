@@ -1,6 +1,7 @@
 import { json } from "@sveltejs/kit";
 import { ObjectId } from "mongodb";
 import { getDb } from "$lib/server/mongo.js";
+import { clearSessionCookie, deleteSessionByToken } from "$lib/server/sessions.js";
 
 function toObjectIdOrNull(id) {
   try {
@@ -10,12 +11,10 @@ function toObjectIdOrNull(id) {
   }
 }
 
-export async function POST({ request }) {
-  const body = await request.json().catch(() => null);
-  if (!body) return json({ error: "invalid json" }, { status: 400 });
+export async function POST({ locals, cookies }) {
+  if (!locals.userId) return json({ error: "unauthorized" }, { status: 401 });
 
-  const userId = String(body.userId ?? "").trim();
-  if (!userId) return json({ error: "missing userId" }, { status: 400 });
+  const userId = String(locals.userId ?? "").trim();
 
   const oid = toObjectIdOrNull(userId);
   if (!oid) return json({ error: "invalid userId" }, { status: 400 });
@@ -23,8 +22,10 @@ export async function POST({ request }) {
   const db = await getDb();
   const users = db.collection("users");
   const trainings = db.collection("trainings");
+  const sessions = db.collection("sessions");
 
   await trainings.deleteMany({ userId });
+  await sessions.deleteMany({ userId });
 
   await users.updateMany(
     {},
@@ -41,6 +42,12 @@ export async function POST({ request }) {
   if (del.deletedCount === 0) {
     return json({ error: "user not found" }, { status: 404 });
   }
+
+  const token = cookies.get("gb_session");
+  if (token) {
+    await deleteSessionByToken(token);
+  }
+  clearSessionCookie(cookies);
 
   return json({ ok: true });
 }

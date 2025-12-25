@@ -12,8 +12,8 @@
     trainingsCount: 0
   });
 
-  async function loadServerStats(userId) {
-    const res = await fetch(`/api/profile?userId=${encodeURIComponent(userId)}`);
+  async function loadServerStats() {
+    const res = await fetch("/api/profile");
     if (!res.ok) return;
     const data = await res.json();
 
@@ -32,13 +32,13 @@
     isAuthenticated = !!session?.userId;
 
     if (session?.userId) {
-      loadServerStats(session.userId);
+      loadServerStats();
     }
 
     const unsub = subscribeSession((s) => {
       session = s;
       isAuthenticated = !!s?.userId;
-      if (s?.userId) loadServerStats(s.userId);
+      if (s?.userId) loadServerStats();
       else stats = { xp: 0, level: 1, trainingsCount: 0 };
     });
 

@@ -1,6 +1,12 @@
 import { json } from "@sveltejs/kit";
 import { ObjectId } from "mongodb";
+import { z } from "zod";
 import { getDb } from "$lib/server/mongo.js";
+import { rateLimit } from "$lib/server/rateLimit.js";
+
+const schema = z.object({
+  targetUserId: z.string().trim().min(1)
+});
 
 function toObjectIdOrNull(id) {
   try {
@@ -10,15 +16,23 @@ function toObjectIdOrNull(id) {
   }
 }
 
-export async function POST({ request }) {
+export async function POST({ request, locals }) {
+  if (!locals.userId) return json({ error: "unauthorized" }, { status: 401 });
+
   const body = await request.json().catch(() => null);
   if (!body) return json({ error: "invalid json" }, { status: 400 });
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) return json({ error: "invalid targetUserId" }, { status: 400 });
 
-  const userId = String(body.userId ?? "").trim();
-  const targetId = String(body.targetId ?? "").trim();
+  const userId = String(locals.userId).trim();
+  const targetId = String(parsed.data.targetUserId).trim();
 
-  if (!userId || !targetId) return json({ error: "missing ids" }, { status: 400 });
   if (userId === targetId) return json({ error: "cannot request yourself" }, { status: 400 });
+
+  const rlKey = `friendreq:user:${userId}`;
+  if (!rateLimit(rlKey, 20, 24 * 60 * 60 * 1000)) {
+    return json({ error: "Zu viele Anfragen heute." }, { status: 429 });
+  }
 
   const uOid = toObjectIdOrNull(userId);
   const tOid = toObjectIdOrNull(targetId);
@@ -32,7 +46,7 @@ export async function POST({ request }) {
 
   if (!me || !other) return json({ error: "user not found" }, { status: 404 });
 
-  const meFriends = Array.isArray(me.friends) ? me.friends : [];
+  const meFriends = Array.isArray(me.friends) ? me.friends.map(String) : [];
   if (meFriends.includes(targetId)) {
     return json({ ok: true, alreadyFriends: true });
   }
