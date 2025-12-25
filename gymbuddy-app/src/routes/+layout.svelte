@@ -26,6 +26,8 @@
       await fetch("/api/auth/logout", { method: "POST", headers: { ...csrfHeader() } });
     } catch {}
     clearSession();
+    session = null;
+    isAuthenticated = false;
     await refreshSession();
     goto("/");
   }
