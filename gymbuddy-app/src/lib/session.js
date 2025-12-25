@@ -1,31 +1,29 @@
 // src/lib/session.js
 
-// Einheitlicher Session-Key (nur Client-Snapshot, echte Session liegt im Cookie/Server)
-export const SESSION_KEY = "GYMBUDDY-ATH";
+// We no longer trust localStorage for auth state. Source of truth is the server
+// session (httpOnly cookie). These helpers only provide a client snapshot after
+// confirming with /api/auth/me.
 
-// Legacy Keys (werden migriert/entfernt)
-const LEGACY_KEYS = [
-  "gymbuddy-session",
-  "gymbuddy-auth",
-  "gymbuddy-session-key",
-  "gymbuddy-session-v1"
-];
-
-function safeParse(jsonStr) {
-  try {
-    return JSON.parse(jsonStr);
-  } catch {
-    return null;
-  }
+export function readSession() {
+  return null;
 }
 
-function isValidSession(s) {
-  return !!(
-    s &&
-    typeof s === "object" &&
-    typeof s.userId === "string" &&
-    s.userId.trim().length > 0
-  );
+export function writeSession() {
+  // no-op: session is derived from server cookie only
+}
+
+export function clearSession() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem("GYMBUDDY-ATH");
+  } catch {}
+  try {
+    window.localStorage.removeItem("gymbuddy-session");
+    window.localStorage.removeItem("gymbuddy-auth");
+    window.localStorage.removeItem("gymbuddy-session-key");
+    window.localStorage.removeItem("gymbuddy-session-v1");
+  } catch {}
+  notifySessionChanged();
 }
 
 function notifySessionChanged() {
@@ -33,91 +31,25 @@ function notifySessionChanged() {
   window.dispatchEvent(new CustomEvent("gymbuddy-session-changed"));
 }
 
-function migrateLegacySession() {
-  if (typeof window === "undefined") return null;
-
-  const current = safeParse(window.localStorage.getItem(SESSION_KEY));
-  if (isValidSession(current)) return current;
-
-  for (const key of LEGACY_KEYS) {
-    const legacyParsed = safeParse(window.localStorage.getItem(key));
-    if (isValidSession(legacyParsed)) {
-      try {
-        window.localStorage.setItem(SESSION_KEY, JSON.stringify(legacyParsed));
-      } catch {}
-
-      for (const k of LEGACY_KEYS) {
-        try {
-          window.localStorage.removeItem(k);
-        } catch {}
-      }
-
-      notifySessionChanged();
-      return legacyParsed;
-    }
-  }
-
-  return null;
-}
-
-export function readSession() {
-  if (typeof window === "undefined") return null;
-
-  const migrated = migrateLegacySession();
-  if (isValidSession(migrated)) return migrated;
-
-  const raw = window.localStorage.getItem(SESSION_KEY);
-  const parsed = safeParse(raw);
-  return isValidSession(parsed) ? parsed : null;
-}
-
-export function writeSession(session) {
-  if (typeof window === "undefined") return;
-
-  if (!isValidSession(session)) {
-    clearSession();
-    return;
-  }
-
-  window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  notifySessionChanged();
-}
-
-export function clearSession() {
-  if (typeof window === "undefined") return;
-
-  try {
-    window.localStorage.removeItem(SESSION_KEY);
-  } catch {}
-
-  notifySessionChanged();
-}
-
 async function fetchServerSession() {
   if (typeof window === "undefined") return null;
 
   try {
     const res = await fetch("/api/auth/me", { method: "GET" });
-    if (!res.ok) {
-      clearSession();
-      return null;
-    }
+    if (!res.ok) return null;
 
     const data = await res.json().catch(() => null);
     if (data?.userId) {
-      const snapshot = {
+      return {
         userId: String(data.userId),
         email: data.email ?? "",
         buddyCode: data.buddyCode ?? ""
       };
-      writeSession(snapshot);
-      return snapshot;
     }
 
-    clearSession();
     return null;
   } catch {
-    return readSession();
+    return null;
   }
 }
 
@@ -131,21 +63,21 @@ export async function refreshSession() {
 export function subscribeSession(callback) {
   if (typeof window === "undefined") return () => {};
 
-  const emit = () => callback(readSession());
+  let latest = null;
+  const emit = () => callback(latest);
 
   const onCustom = () => emit();
-  const onStorage = (e) => {
-    if (!e || e.key === null || e.key === SESSION_KEY || LEGACY_KEYS.includes(e.key)) {
-      emit();
-    }
-  };
+  const onStorage = () => emit();
 
   window.addEventListener("gymbuddy-session-changed", onCustom);
   window.addEventListener("storage", onStorage);
 
+  // start as logged out until server confirms
+  latest = null;
   emit();
   fetchServerSession().then((s) => {
-    if (s) emit();
+    latest = s;
+    emit();
   });
 
   return () => {
