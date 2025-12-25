@@ -1,6 +1,6 @@
 // src/lib/session.js
 
-// Einheitlicher Session-Key (bitte überall verwenden)
+// Einheitlicher Session-Key (bitte ueberall verwenden)
 export const SESSION_KEY = "GYMBUDDY-ATH";
 
 // Alte Keys (falls du vorher andere Keys hattest) automatisch migrieren
@@ -94,7 +94,7 @@ export function clearSession() {
 }
 
 /**
- * Für Pages: callback sofort + bei Login/Logout updaten
+ * Fuer Pages: callback sofort + bei Login/Logout updaten
  */
 export function subscribeSession(callback) {
   if (typeof window === "undefined") return () => {};
@@ -118,3 +118,6 @@ export function subscribeSession(callback) {
     window.removeEventListener("storage", onStorage);
   };
 }
+
+// Alias fuer bestehende Importe (altes Naming)
+export const onSessionChange = subscribeSession;

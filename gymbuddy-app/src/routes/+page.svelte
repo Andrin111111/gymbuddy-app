@@ -1,7 +1,7 @@
 <script>
   import { onMount } from "svelte";
   import { calculateLevel } from "$lib/gamification.js";
-  import { readSession, onSessionChange } from "$lib/session.js";
+  import { readSession, subscribeSession } from "$lib/session.js";
 
   let isAuthenticated = $state(false);
   let session = $state(null);
@@ -35,7 +35,7 @@
       loadServerStats(session.userId);
     }
 
-    const unsub = onSessionChange((s) => {
+    const unsub = subscribeSession((s) => {
       session = s;
       isAuthenticated = !!s?.userId;
       if (s?.userId) loadServerStats(s.userId);

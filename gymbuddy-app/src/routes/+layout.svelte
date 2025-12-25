@@ -2,7 +2,7 @@
   import "../styles.css";
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { readSession, onSessionChange, clearSession } from "$lib/session.js";
+  import { readSession, subscribeSession, clearSession } from "$lib/session.js";
 
   let { children } = $props();
 
@@ -13,7 +13,7 @@
     session = readSession();
     isAuthenticated = !!session?.userId;
 
-    const unsub = onSessionChange((s) => {
+    const unsub = subscribeSession((s) => {
       session = s;
       isAuthenticated = !!s?.userId;
     });
