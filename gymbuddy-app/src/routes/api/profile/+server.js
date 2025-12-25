@@ -21,8 +21,6 @@ const profileSchema = z.object({
   visibility: z.enum(["public", "friends", "private"]).optional(),
   feedOptIn: z.boolean().optional(),
   allowCodeLookup: z.boolean().optional(),
-  addressLine1: z.string().max(80).trim().optional(),
-  addressLine2: z.string().max(80).trim().optional(),
   postalCode: z.string().max(12).trim().optional(),
   city: z.string().max(50).trim().optional(),
   country: z.string().max(50).trim().optional()
@@ -48,8 +46,6 @@ function pickProfileFromUser(u) {
     visibility: p.visibility || u?.visibility || "friends",
     feedOptIn: p.feedOptIn === true || u?.feedOptIn === true,
     allowCodeLookup: p.allowCodeLookup !== false && u?.allowCodeLookup !== false,
-    addressLine1: String(p.addressLine1 ?? "").trim(),
-    addressLine2: String(p.addressLine2 ?? "").trim(),
     postalCode: String(p.postalCode ?? "").trim(),
     city: String(p.city ?? "").trim(),
     country: String(p.country ?? "").trim() || "CH"
@@ -131,8 +127,6 @@ export async function PUT({ locals, request }) {
     visibility: updates?.visibility || "friends",
     feedOptIn: updates?.feedOptIn === true,
     allowCodeLookup: updates?.allowCodeLookup !== false,
-    addressLine1: String(updates?.addressLine1 ?? "").trim(),
-    addressLine2: String(updates?.addressLine2 ?? "").trim(),
     postalCode: String(updates?.postalCode ?? "").trim(),
     city: String(updates?.city ?? "").trim(),
     country: String(updates?.country ?? "").trim() || "CH"
@@ -145,8 +139,6 @@ export async function PUT({ locals, request }) {
       profileDoc.goals,
       profileDoc.preferredTimes,
       profileDoc.contact,
-      profileDoc.addressLine1,
-      profileDoc.addressLine2,
       profileDoc.postalCode,
       profileDoc.city,
       profileDoc.country
@@ -169,7 +161,7 @@ export async function PUT({ locals, request }) {
   const now = new Date();
   const previousProfile = pickProfileFromUser(existingUser);
 
-  const addressKeys = ["addressLine1", "addressLine2", "postalCode", "city", "country"];
+  const addressKeys = ["postalCode", "city", "country"];
   const addressChanged = addressKeys.some((key) => (profileDoc[key] || "") !== (previousProfile[key] || ""));
 
   let geoOps = {};
@@ -192,15 +184,15 @@ export async function PUT({ locals, request }) {
           geoSource: "geocoded",
           geoPrecision: result.precision || "approx"
         };
-        geoMessage = "Location updated";
+        geoMessage = "Standort aktualisiert";
       } else {
         geoOps.$unset = { geo: "", geoSource: "", geoPrecision: "" };
         geoOps.$set = { ...(geoOps.$set || {}), geoUpdatedAt: null };
-        geoMessage = "Address saved, location not found";
+        geoMessage = "Adresse gespeichert, Standort nicht gefunden";
       }
     } else {
       geoOps.$unset = { geo: "", geoUpdatedAt: "", geoSource: "", geoPrecision: "" };
-      geoMessage = "Address cleared";
+      geoMessage = "Adresse entfernt";
     }
   }
 

@@ -27,7 +27,13 @@ export async function GET({ locals }) {
     { _id: String(locals.userId) },
     { projection: { friends: 1, name: 1, profile: 1, email: 1, buddyCode: 1, lifetimeXp: 1, xp: 1, seasonXp: 1 } }
   );
-  if (!me) return json({ error: "user not found" }, { status: 404 });
+  if (!me) {
+    return json({
+      seasonId: currentSeasonId(),
+      users: [],
+      warning: "user not found"
+    });
+  }
 
   await recomputeSeasonXp(locals.userId);
 

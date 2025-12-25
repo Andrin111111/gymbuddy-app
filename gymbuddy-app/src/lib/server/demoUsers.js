@@ -1,4 +1,4 @@
-// src/lib/server/demoUsers.js
+﻿// src/lib/server/demoUsers.js
 
 export const DEMO_USERS = [
   {
@@ -7,7 +7,7 @@ export const DEMO_USERS = [
     buddyCode: "900111",
     profile: {
       name: "Autoaccept Demo 1",
-      gym: "Demo Gym",
+      gym: "Demo Gym Winterthur",
       trainingLevel: "intermediate",
       goals: "Hypertrophie, Kraft",
       preferredTimes: "Abend",
@@ -15,6 +15,9 @@ export const DEMO_USERS = [
       visibility: "public",
       feedOptIn: false,
       allowCodeLookup: true,
+      postalCode: "8400",
+      city: "Winterthur",
+      country: "CH",
       autoAccept: true
     }
   },
@@ -24,7 +27,7 @@ export const DEMO_USERS = [
     buddyCode: "900222",
     profile: {
       name: "Autoaccept Demo 2",
-      gym: "City Gym",
+      gym: "City Gym Zürich",
       trainingLevel: "advanced",
       goals: "Strength, Powerlifting",
       preferredTimes: "Morgen",
@@ -32,6 +35,9 @@ export const DEMO_USERS = [
       visibility: "public",
       feedOptIn: false,
       allowCodeLookup: true,
+      postalCode: "8000",
+      city: "Zürich",
+      country: "CH",
       autoAccept: true
     }
   },
@@ -49,6 +55,9 @@ export const DEMO_USERS = [
       visibility: "public",
       feedOptIn: false,
       allowCodeLookup: true,
+      postalCode: "8404",
+      city: "Winterthur",
+      country: "CH",
       autoAccept: true
     }
   }
@@ -70,7 +79,31 @@ export async function ensureDemoUsers(db) {
             feedOptIn: u.profile.feedOptIn,
             allowCodeLookup: u.profile.allowCodeLookup,
             autoAccept: true,
-            friends: []
+            friends: [],
+            trainingsCount: 5,
+            xp: 1200,
+            lifetimeXp: 1200,
+            seasonXp: 800,
+            geo: u.profile.city
+              ? {
+                  type: "Point",
+                  coordinates:
+                    u.profile.city === "Winterthur"
+                      ? [8.724, 47.498]
+                      : u.profile.city === "Zürich"
+                      ? [8.5417, 47.3769]
+                      : [8.55, 47.38]
+                }
+              : undefined,
+            geoUpdatedAt: new Date(),
+            geoSource: "seed",
+            geoPrecision: "approx"
+          },
+          $set: {
+            profile: u.profile,
+            visibility: u.profile.visibility,
+            feedOptIn: u.profile.feedOptIn,
+            allowCodeLookup: u.profile.allowCodeLookup
           }
         },
         { upsert: true }
@@ -78,3 +111,7 @@ export async function ensureDemoUsers(db) {
     )
   );
 }
+
+
+
+

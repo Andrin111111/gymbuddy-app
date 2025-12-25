@@ -1,4 +1,4 @@
-<script>
+﻿<script>
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { readSession, subscribeSession } from "$lib/session.js";
@@ -106,7 +106,7 @@
     {#if loading && leaderboard.length === 0}
       <div class="text-muted">Lade...</div>
     {:else if leaderboard.length === 0}
-      <div class="alert alert-info">Keine Eintraege verfuegbar. Lade Freunde ein und logge Workouts.</div>
+      <div class="alert alert-info">Keine Einträge verfügbar. Lade Freunde ein und logge Workouts.</div>
     {:else}
       <div class="card">
         <div class="card-body">
@@ -161,7 +161,7 @@
           {#if loadingLifetime && lifetime.length === 0}
             <div class="text-muted">Lade...</div>
           {:else if lifetime.length === 0}
-            <div class="text-muted">Keine Eintraege.</div>
+            <div class="text-muted">Keine Einträge.</div>
           {:else}
             <div class="table-responsive">
               <table class="table align-middle">
@@ -198,3 +198,9 @@
     {/if}
   {/if}
 </div>
+
+
+
+
+
+

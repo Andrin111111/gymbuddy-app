@@ -109,6 +109,26 @@
     else workoutForm = next;
   }
 
+  function ensureDefaultExerciseSelection(target = "workout") {
+    if (!Array.isArray(exercisesCatalog.all) || exercisesCatalog.all.length === 0) return;
+    const fallback = exercisesCatalog.all[0];
+    mutateForm(target, (form) => {
+      if (!Array.isArray(form.exercises) || form.exercises.length === 0) {
+        form.exercises = [createExerciseEntry({ exerciseKey: fallback.key, name: fallback.name })];
+        return;
+      }
+      for (const ex of form.exercises) {
+        if (!ex.exerciseKey) {
+          ex.exerciseKey = fallback.key;
+          ex.name = fallback.name;
+        }
+        if (!Array.isArray(ex.sets) || ex.sets.length === 0) {
+          ex.sets = [createSetEntry()];
+        }
+      }
+    });
+  }
+
   function setExerciseKey(target, index, key) {
     mutateForm(target, (form) => {
       const ex = form.exercises[index];
@@ -168,11 +188,13 @@
 
   function resetWorkoutForm(seed) {
     workoutForm = createWorkoutForm(seed);
+    ensureDefaultExerciseSelection("workout");
     editingWorkoutId = "";
   }
 
   function resetTemplateForm(seed) {
     templateForm = createTemplateForm(seed);
+    ensureDefaultExerciseSelection("template");
     editingTemplateId = "";
   }
 
@@ -199,6 +221,8 @@
         builtIn: Array.isArray(data?.builtIn) ? data.builtIn : [],
         custom: Array.isArray(data?.custom) ? data.custom : []
       };
+      ensureDefaultExerciseSelection("workout");
+      ensureDefaultExerciseSelection("template");
     } catch (e) {
       loadError = e?.message || "Fehler beim Laden.";
     } finally {
@@ -284,10 +308,10 @@
     try {
       const res = await fetch("/api/buddies/suggestions");
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Vorschlaege konnten nicht geladen werden.");
+      if (!res.ok) throw new Error(data?.error || "Vorschläge konnten nicht geladen werden.");
       buddySuggestions = Array.isArray(data?.suggestions) ? data.suggestions : [];
     } catch (e) {
-      suggestionsError = e?.message || "Vorschlaege konnten nicht geladen werden.";
+      suggestionsError = e?.message || "Vorschläge konnten nicht geladen werden.";
       buddySuggestions = [];
     } finally {
       suggestionsLoading = false;
@@ -318,13 +342,22 @@
     if (!session?.userId) return;
     workoutError = "";
 
+    ensureDefaultExerciseSelection("workout");
     const payload = buildWorkoutPayload();
+    const fallback = Array.isArray(exercisesCatalog.all) && exercisesCatalog.all.length ? exercisesCatalog.all[0] : null;
+    if (fallback) {
+      payload.exercises = (payload.exercises || []).map((ex) => ({
+        exerciseKey: ex.exerciseKey || fallback.key,
+        name: ex.name || fallback.name,
+        sets: Array.isArray(ex.sets) && ex.sets.length > 0 ? ex.sets : [createSetEntry()]
+      }));
+    }
     if (!payload.date) {
-      workoutError = "Bitte Datum waehlen.";
+      workoutError = "Bitte Datum wählen.";
       return;
     }
     if (!payload.exercises.length || payload.exercises.some((ex) => !ex.exerciseKey || !ex.sets.length)) {
-      workoutError = "Bitte mindestens eine Uebung mit Saetzen erfassen.";
+      workoutError = "Bitte mindestens eine Übung mit Sätzen erfassen.";
       return;
     }
 
@@ -357,7 +390,7 @@
   }
 
   async function deleteWorkout(id) {
-    const confirmDelete = confirm("Workout wirklich loeschen?");
+    const confirmDelete = confirm("Workout wirklich Löschen?");
     if (!confirmDelete) return;
     savingWorkout = true;
     workoutError = "";
@@ -367,11 +400,11 @@
         headers: { ...csrfHeader() }
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Workout konnte nicht geloescht werden.");
+      if (!res.ok) throw new Error(data?.error || "Workout konnte nicht gelöscht werden.");
       applySummary(data);
       await loadWorkouts();
     } catch (e) {
-      workoutError = e?.message || "Workout konnte nicht geloescht werden.";
+      workoutError = e?.message || "Workout konnte nicht gelöscht werden.";
     } finally {
       savingWorkout = false;
     }
@@ -413,7 +446,7 @@
 
     const payload = buildTemplatePayload();
     if (!payload.name || !payload.exercises.length) {
-      templateError = "Bitte Name und mindestens eine Uebung angeben.";
+      templateError = "Bitte Name und mindestens eine Übung angeben.";
       return;
     }
 
@@ -443,7 +476,7 @@
   }
 
   async function deleteTemplate(id) {
-    const confirmDelete = confirm("Vorlage wirklich loeschen?");
+    const confirmDelete = confirm("Vorlage wirklich Löschen?");
     if (!confirmDelete) return;
     templateError = "";
     savingTemplate = true;
@@ -453,11 +486,11 @@
         headers: { ...csrfHeader() }
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Vorlage konnte nicht geloescht werden.");
+      if (!res.ok) throw new Error(data?.error || "Vorlage konnte nicht gelöscht werden.");
       if (editingTemplateId === id) resetTemplateForm();
       await loadTemplates();
     } catch (e) {
-      templateError = e?.message || "Vorlage konnte nicht geloescht werden.";
+      templateError = e?.message || "Vorlage konnte nicht gelöscht werden.";
     } finally {
       savingTemplate = false;
     }
@@ -477,14 +510,14 @@
     customExerciseError = "";
     addingCustomExercise = true;
     try {
-      if (!customExerciseForm.name) throw new Error("Name wird benoetigt.");
+      if (!customExerciseForm.name) throw new Error("Name wird benötigt.");
       const res = await fetch("/api/exercises/custom", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...csrfHeader() },
         body: JSON.stringify(customExerciseForm)
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Uebung konnte nicht erstellt werden.");
+      if (!res.ok) throw new Error(data?.error || "Übung konnte nicht erstellt werden.");
       exercisesCatalog = {
         all: Array.isArray(data?.all) ? data.all : exercisesCatalog.all,
         builtIn: Array.isArray(data?.builtIn) ? data.builtIn : exercisesCatalog.builtIn,
@@ -492,7 +525,7 @@
       };
       customExerciseForm = { name: "", muscleGroup: "", equipment: "", isBodyweight: false };
     } catch (e) {
-      customExerciseError = e?.message || "Uebung konnte nicht erstellt werden.";
+      customExerciseError = e?.message || "Übung konnte nicht erstellt werden.";
     } finally {
       addingCustomExercise = false;
     }
@@ -564,7 +597,7 @@
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
               <div>
                 <h5 class="card-title mb-1">{editingWorkoutId ? "Workout bearbeiten" : "Workout erfassen"}</h5>
-                <div class="text-muted small">Datum, Dauer, Buddy und alle Uebungen mit Sets</div>
+                <div class="text-muted small">Datum, Dauer, Buddy und alle Übungen mit Sets</div>
               </div>
               {#if editingWorkoutId}
                 <span class="badge text-bg-info">Bearbeitung</span>
@@ -631,11 +664,11 @@
                   <div class="text-danger small mt-1">{suggestionsError}</div>
                 {/if}
                 {#if suggestionsLoading}
-                  <div class="text-muted small mt-1">Buddy Vorschlaege werden geladen...</div>
+                  <div class="text-muted small mt-1">Buddy Vorschläge werden geladen...</div>
                 {/if}
                 {#if buddySuggestions.length > 0}
                   <div class="mt-2">
-                    <div class="fw-semibold small mb-1">Vorschlaege</div>
+                    <div class="fw-semibold small mb-1">Vorschläge</div>
                     <div class="vstack gap-2">
                       {#each buddySuggestions as s (s.userId)}
                         <div class="border rounded p-2">
@@ -654,7 +687,7 @@
                               type="button"
                               onclick={() => (workoutForm = { ...workoutForm, buddyUserId: s.userId })}
                             >
-                              Waehlen
+                              wählen
                             </button>
                           </div>
                         </div>
@@ -677,9 +710,9 @@
             </div>
 
             <div class="d-flex justify-content-between align-items-center mb-2">
-              <h6 class="mb-0">Uebungen &amp; Saetze</h6>
+              <h6 class="mb-0">Übungen &amp; Sätze</h6>
               <button class="btn btn-outline-primary btn-sm" type="button" onclick={() => addExercise("workout")}>
-                Uebung hinzufuegen
+                Übung hinzufügen
               </button>
             </div>
 
@@ -688,20 +721,20 @@
                 <div class="border rounded p-3">
                   <div class="d-flex gap-2 align-items-end">
                     <div class="flex-grow-1">
-                      <label class="form-label" for={`workout-ex-${exIndex}`}>Uebung</label>
+                      <label class="form-label" for={`workout-ex-${exIndex}`}>Übung</label>
                       <select
                         id={`workout-ex-${exIndex}`}
                         class="form-select"
                         value={ex.exerciseKey}
                         onchange={(e) => setExerciseKey("workout", exIndex, e.target.value)}
                       >
-                        <option value="">Uebung waehlen...</option>
+                        <option value="">Übung wählen...</option>
                         <optgroup label="Katalog">
                           {#each exercisesCatalog.builtIn as opt}
                             <option value={opt.key}>{opt.name}</option>
                           {/each}
                         </optgroup>
-                        <optgroup label="Eigene Uebungen">
+                        <optgroup label="Eigene Übungen">
                           {#each exercisesCatalog.custom as opt}
                             <option value={opt.key}>{opt.name}</option>
                           {/each}
@@ -724,7 +757,7 @@
                     <div class="d-flex justify-content-between align-items-center mb-2">
                       <div class="text-muted small">Sets</div>
                       <button class="btn btn-outline-secondary btn-sm" type="button" onclick={() => addSet("workout", exIndex)}>
-                        Set hinzufuegen
+                        Set hinzufügen
                       </button>
                     </div>
                     <div class="vstack gap-2">
@@ -846,7 +879,7 @@
 
         <div class="card mb-3">
           <div class="card-body">
-            <h6 class="card-title mb-2">Eigene Uebung anlegen</h6>
+            <h6 class="card-title mb-2">Eigene Übung anlegen</h6>
             {#if customExerciseError}
               <div class="alert alert-danger py-2">{customExerciseError}</div>
             {/if}
@@ -885,10 +918,10 @@
                 checked={customExerciseForm.isBodyweight}
                 onchange={(e) => (customExerciseForm = { ...customExerciseForm, isBodyweight: e.target.checked })}
               />
-              <label class="form-check-label" for="customIsBodyweight">Koerpergewicht</label>
+              <label class="form-check-label" for="customIsBodyweight">Körpergewicht</label>
             </div>
             <button class="btn btn-outline-primary btn-sm" type="button" onclick={addCustomExercise} disabled={addingCustomExercise}>
-              Uebung speichern
+              Übung speichern
             </button>
           </div>
         </div>
@@ -951,9 +984,9 @@
               ></textarea>
             </div>
             <div class="d-flex justify-content-between align-items-center mb-2">
-              <span class="small fw-semibold">Uebungen</span>
+              <span class="small fw-semibold">Übungen</span>
               <button class="btn btn-outline-secondary btn-sm" type="button" onclick={() => addExercise("template")}>
-                Uebung hinzufuegen
+                Übung hinzufügen
               </button>
             </div>
             <div class="vstack gap-2 mb-2">
@@ -966,13 +999,13 @@
                         value={ex.exerciseKey}
                         onchange={(e) => setExerciseKey("template", idx, e.target.value)}
                       >
-                        <option value="">Uebung waehlen...</option>
+                        <option value="">Übung wählen...</option>
                         <optgroup label="Katalog">
                           {#each exercisesCatalog.builtIn as opt}
                             <option value={opt.key}>{opt.name}</option>
                           {/each}
                         </optgroup>
-                        <optgroup label="Eigene Uebungen">
+                        <optgroup label="Eigene Übungen">
                           {#each exercisesCatalog.custom as opt}
                             <option value={opt.key}>{opt.name}</option>
                           {/each}
@@ -1035,7 +1068,7 @@
                       </div>
                     {/each}
                     <button class="btn btn-link btn-sm ps-0" type="button" onclick={() => addSet("template", idx)}>
-                      + Set hinzufuegen
+                      + Set hinzufügen
                     </button>
                   </div>
                 </div>
@@ -1062,7 +1095,7 @@
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2">
               <h5 class="card-title mb-0">Gespeicherte Workouts</h5>
-              <span class="text-muted small">{workouts.length} Eintraege</span>
+              <span class="text-muted small">{workouts.length} Einträge</span>
             </div>
 
             {#if loadingWorkouts}
@@ -1077,7 +1110,7 @@
                       <div>
                         <div class="fw-semibold">{displayDate(w)} - {w.durationMinutes} Min</div>
                         <div class="text-muted small">
-                          {w.exercises?.length || 0} Uebungen
+                          {w.exercises?.length || 0} Übungen
                           {#if w.buddyName}
                             - Buddy: {w.buddyName}
                           {/if}
@@ -1088,7 +1121,7 @@
                           Bearbeiten
                         </button>
                         <button class="btn btn-outline-danger" type="button" onclick={() => deleteWorkout(w._id)}>
-                          Loeschen
+                          Löschen
                         </button>
                         <button
                           class="btn btn-outline-primary"
@@ -1150,7 +1183,7 @@
                       <div>
                         <div class="fw-semibold">{t.name}</div>
                         <div class="text-muted small">
-                          {t.exercises?.length || 0} Uebungen - {t.durationMinutes} Min
+                          {t.exercises?.length || 0} Übungen - {t.durationMinutes} Min
                         </div>
                       </div>
                       <div class="btn-group btn-group-sm">
@@ -1161,7 +1194,7 @@
                           Bearbeiten
                         </button>
                         <button class="btn btn-outline-danger" type="button" onclick={() => deleteTemplate(t._id)}>
-                          Loeschen
+                          Löschen
                         </button>
                       </div>
                     </div>
@@ -1175,5 +1208,8 @@
     </div>
   {/if}
 </div>
+
+
+
 
 

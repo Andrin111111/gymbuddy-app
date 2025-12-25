@@ -1,4 +1,4 @@
-<script>
+﻿<script>
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { readSession, writeSession, clearSession, subscribeSession, refreshSession, csrfHeader } from "$lib/session.js";
@@ -26,8 +26,6 @@
   let visibility = $state("friends");
   let allowCodeLookup = $state(true);
   let feedOptIn = $state(false);
-  let addressLine1 = $state("");
-  let addressLine2 = $state("");
   let postalCode = $state("");
   let city = $state("");
   let country = $state("CH");
@@ -48,6 +46,24 @@
   let notifications = $state([]);
   let notificationsLoading = $state(false);
   let notificationsError = $state("");
+  const ZIP_CITY_MAP = {
+    "8400": "Winterthur",
+    "8404": "Winterthur",
+    "8000": "Zürich",
+    "8001": "Zürich",
+    "8050": "Zürich Oerlikon"
+  };
+  const DEMO_NAME_MAP = {
+    "demo-auto-1": "Autoaccept Demo 1",
+    "demo-auto-2": "Autoaccept Demo 2",
+    "demo-auto-3": "Autoaccept Demo 3"
+  };
+  const NOTIFICATION_LABELS = {
+    friend_request_received: "Neue Freundschaftsanfrage",
+    friend_request_accepted: "Freundschaft akzeptiert",
+    achievement_unlocked: "Achievement freigeschaltet",
+    season_award: "Season Auszeichnung"
+  };
   const preferredOptions = ["Morgen", "Mittag", "Abend", "Wochenende", "Flexibel"];
 
   function setError(msg) {
@@ -56,6 +72,44 @@
 
   function rankIcon(key) {
     return RANK_ICONS[key] || RANK_ICONS.apex;
+  }
+
+  function autoFillFromZip(val) {
+    postalCode = val;
+    const guess = ZIP_CITY_MAP[val.trim()];
+    if (guess && !city) city = guess;
+  }
+
+  function autoFillFromCity(val) {
+    city = val;
+    const entry = Object.entries(ZIP_CITY_MAP).find(([, c]) => c.toLowerCase() === val.trim().toLowerCase());
+    if (entry && !postalCode) postalCode = entry[0];
+  }
+
+  function resolveName(id, fallback = "") {
+    if (!id) return fallback;
+    return DEMO_NAME_MAP[id] || id;
+  }
+
+  function notificationTitle(n) {
+    return NOTIFICATION_LABELS[n.type] || n.type;
+  }
+
+  function notificationBody(n) {
+    const p = n?.payload || {};
+    if (n.type === "friend_request_received" && p.byUserId) return `Von ${resolveName(p.byUserId, "Buddy")}`;
+    if (n.type === "friend_request_accepted" && p.byUserId) return `${resolveName(p.byUserId, "Buddy")} hat angenommen`;
+    if (n.type === "achievement_unlocked" && p.key) {
+      const a = achievements.find((x) => x.key === p.key);
+      return a ? `${a.title} – ${a.description || ""}` : `Achievement: ${p.key}`;
+    }
+    if (n.type === "season_award" && p.placement) return `Season Platz ${p.placement}`;
+    if (Object.keys(p).length === 0) return "Keine weiteren Details.";
+    try {
+      return JSON.stringify(p);
+    } catch {
+      return String(p);
+    }
   }
 
   function achievementIcon(key) {
@@ -152,8 +206,6 @@
       visibility = profile?.visibility ?? "friends";
       allowCodeLookup = profile?.allowCodeLookup ?? true;
       feedOptIn = profile?.feedOptIn ?? false;
-      addressLine1 = profile?.addressLine1 ?? "";
-      addressLine2 = profile?.addressLine2 ?? "";
       postalCode = profile?.postalCode ?? "";
       city = profile?.city ?? "";
       country = profile?.country ?? "CH";
@@ -251,8 +303,6 @@
           visibility,
           feedOptIn,
           allowCodeLookup,
-          addressLine1,
-          addressLine2,
           postalCode,
           city,
           country
@@ -454,7 +504,7 @@
 
         <label class="form-label" for="times">Bevorzugte Zeiten</label>
         <select id="times" class="form-select mb-3" bind:value={preferredTimes}>
-          <option value="">Bitte wählen</option>
+          <option value="">Bitte wÃ¤hlen</option>
           {#each preferredOptions as opt}
             <option value={opt}>{opt}</option>
           {/each}
@@ -467,24 +517,33 @@
         <div class="border rounded p-3 mb-3">
           <h6 class="mb-2">Adresse (für Distanz)</h6>
           <p class="text-muted small mb-2">
-            Deine Adresse wird nur zur Distanzberechnung verwendet. Andere Nutzer sehen nur PLZ, Stadt und eine ungefähre Distanz.
+            Nur PLZ, Ort und Land. Andere sehen nur eine ungefähre Distanz (keine genaue Adresse).
           </p>
-          <label class="form-label" for="addr1">Adresszeile 1</label>
-          <input id="addr1" class="form-control mb-2" bind:value={addressLine1} maxlength="80" />
-          <label class="form-label" for="addr2">Adresszeile 2 (optional)</label>
-          <input id="addr2" class="form-control mb-2" bind:value={addressLine2} maxlength="80" />
           <div class="row g-2">
             <div class="col-4">
               <label class="form-label" for="postal">PLZ</label>
-              <input id="postal" class="form-control mb-2" bind:value={postalCode} maxlength="12" />
+              <input
+                id="postal"
+                class="form-control mb-2"
+                bind:value={postalCode}
+                maxlength="12"
+                oninput={(e) => autoFillFromZip(e.target.value)}
+              />
             </div>
             <div class="col-8">
               <label class="form-label" for="city">Ort</label>
-              <input id="city" class="form-control mb-2" bind:value={city} maxlength="50" />
+              <input
+                id="city"
+                class="form-control mb-2"
+                bind:value={city}
+                maxlength="50"
+                oninput={(e) => autoFillFromCity(e.target.value)}
+              />
             </div>
           </div>
           <label class="form-label" for="country">Land</label>
           <input id="country" class="form-control mb-2" bind:value={country} maxlength="50" />
+          <div class="text-muted small mb-2">Bekannte Beispiele: 8400 Winterthur, 8000 Zuerich.</div>
           {#if geoStatus}
             <div class="alert alert-info py-2 my-2">{geoStatus}</div>
           {/if}
@@ -509,7 +568,7 @@
           <input id="feedOptIn" class="form-check-input" type="checkbox" bind:checked={feedOptIn} />
           <label class="form-check-label" for="feedOptIn">Feed Opt-in</label>
         </div>
-        <div class="text-muted small mb-3">Wenn aktiviert, können Workouts (gemäß Sichtbarkeit) im Feed erscheinen.</div>
+        <div class="text-muted small mb-3">Wenn aktiviert, kÃ¶nnen Workouts (gemÃ¤ÃŸ Sichtbarkeit) im Feed erscheinen.</div>
 
         <div class="d-flex gap-2 mt-3">
           <button class="btn btn-primary" type="button" onclick={saveProfile} disabled={loading}>
@@ -521,7 +580,7 @@
         </div>
 
         <div class="alert alert-info mt-4">
-          Fuer ein vollstaendig ausgefuelltes Profil erhaeltst du einmalig 30 XP.
+          Für ein vollständig ausgefülltes Profil erhältst du einmalig 30 XP.
           {#if profileBonusApplied}
             <div class="mt-2"><strong>Bonus wurde bereits gutgeschrieben.</strong></div>
           {/if}
@@ -559,14 +618,18 @@
                 <div class={"border rounded p-2 h-100 " + (ach.unlockedAt ? "bg-light" : "bg-body")}>
                   <div class="d-flex gap-2 align-items-center">
                     <img src={achievementIcon(ach.key)} alt={ach.name} width="40" height="40" class="flex-shrink-0 rounded" />
-                    <div>
+                    <div class="w-100">
                       <div class="fw-semibold">{ach.name}</div>
                       <div class="text-muted small text-uppercase">{ach.category}</div>
                       {#if ach.unlockedAt}
-                        <div class="text-success small">Unlockt: {new Date(ach.unlockedAt).toLocaleDateString()}</div>
+                        <div class="text-success small">Unlocked: {new Date(ach.unlockedAt).toLocaleDateString()}</div>
                       {:else}
                         <div class="text-muted small">Locked</div>
                       {/if}
+                      <details class="small mt-1">
+                        <summary class="text-primary">Was tun?</summary>
+                        <div class="text-muted">{ach.description || "Schalte dieses Achievement durch Fortschritt frei."}</div>
+                      </details>
                     </div>
                   </div>
                 </div>
@@ -600,8 +663,8 @@
             {#each notifications as n (n._id)}
               <div class={"list-group-item d-flex justify-content-between align-items-start " + (n.read ? "" : "bg-light")}>
                 <div>
-                  <div class="fw-semibold">{n.type}</div>
-                  <div class="text-muted small">{n.payload?.message || JSON.stringify(n.payload || {})}</div>
+                  <div class="fw-semibold">{notificationTitle(n)}</div>
+                  <div class="text-muted small">{notificationBody(n)}</div>
                   <div class="text-muted small">{new Date(n.createdAt).toLocaleString()}</div>
                 </div>
                 {#if !n.read}
@@ -617,6 +680,14 @@
     </div>
   {/if}
 </div>
+
+
+
+
+
+
+
+
 
 
 
