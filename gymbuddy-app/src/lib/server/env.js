@@ -7,9 +7,10 @@ const envSchema = z.object({
   MONGODB_DB_NAME: z.string().min(1).default("gymbuddy"),
   SESSION_SECRET: z.string().min(16, "SESSION_SECRET is required"),
   CSRF_SECRET: z.string().min(16, "CSRF_SECRET is required"),
-  APP_ORIGIN: z.string().url().min(1, "APP_ORIGIN is required"),
+  APP_ORIGIN: z.string().url().optional(),
   NODE_ENV: z.string().optional(),
-  GEOCODING_API_KEY: z.string().min(1).optional()
+  GEOCODING_API_KEY: z.string().min(1).optional(),
+  RATE_LIMIT_REDIS_URL: z.string().min(1).optional()
 });
 
 let cachedEnv;
@@ -32,9 +33,10 @@ export function getEnv() {
     MONGODB_DB_NAME: data.MONGODB_DB_NAME || "gymbuddy",
     SESSION_SECRET: data.SESSION_SECRET,
     CSRF_SECRET: data.CSRF_SECRET,
-    APP_ORIGIN: data.APP_ORIGIN,
+    APP_ORIGIN: data.APP_ORIGIN || "",
     NODE_ENV: data.NODE_ENV,
-    GEOCODING_API_KEY: data.GEOCODING_API_KEY
+    GEOCODING_API_KEY: data.GEOCODING_API_KEY,
+    RATE_LIMIT_REDIS_URL: data.RATE_LIMIT_REDIS_URL
   };
 
   return cachedEnv;
