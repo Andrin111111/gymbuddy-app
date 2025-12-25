@@ -64,7 +64,8 @@ export function subscribeSession(callback) {
   if (typeof window === "undefined") return () => {};
 
   let latest = null;
-  const emit = () => callback(latest);
+  let ready = false;
+  const emit = () => callback(latest, ready);
 
   const onCustom = () => emit();
   const onStorage = () => emit();
@@ -72,11 +73,11 @@ export function subscribeSession(callback) {
   window.addEventListener("gymbuddy-session-changed", onCustom);
   window.addEventListener("storage", onStorage);
 
-  // start as logged out until server confirms
-  latest = null;
+  // start as loading; emit once ready to avoid false "not logged in" flicker
   emit();
   fetchServerSession().then((s) => {
     latest = s;
+    ready = true;
     emit();
   });
 

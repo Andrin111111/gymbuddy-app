@@ -5,7 +5,8 @@
   import { RANK_ICONS } from "$lib/ranks.config.js";
 
   let session = $state(readSession());
-  let isAuthenticated = $derived(!!session?.userId);
+  let sessionReady = $state(false);
+  let isAuthenticated = $derived(sessionReady && !!session?.userId);
 
   let loading = $state(false);
   let error = $state("");
@@ -55,13 +56,13 @@
   }
 
   onMount(() => {
-    const unsub = subscribeSession((s) => {
+    const unsub = subscribeSession((s, ready) => {
       session = s;
-      if (s?.userId) {
+      sessionReady = ready;
+      if (ready && s?.userId) {
         loadLeaderboard();
         loadLifetime();
-      }
-      else {
+      } else if (ready && !s?.userId) {
         leaderboard = [];
         seasonId = "";
         error = "";
@@ -79,7 +80,9 @@
 <div class="container py-4">
   <h1 class="mb-3">Season Leaderboard</h1>
 
-  {#if !isAuthenticated}
+  {#if !sessionReady}
+    <div class="alert alert-info">Lade Session...</div>
+  {:else if !isAuthenticated}
     <div class="alert alert-warning">
       Bitte melde dich an, um das Friends Leaderboard zu sehen.
     </div>

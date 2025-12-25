@@ -48,6 +48,7 @@
   let notifications = $state([]);
   let notificationsLoading = $state(false);
   let notificationsError = $state("");
+  const preferredOptions = ["Morgen", "Mittag", "Abend", "Wochenende", "Flexibel"];
 
   function setError(msg) {
     error = msg || "";
@@ -452,10 +453,16 @@
         <textarea id="goals" class="form-control mb-3" rows="2" bind:value={goals}></textarea>
 
         <label class="form-label" for="times">Bevorzugte Zeiten</label>
-        <input id="times" class="form-control mb-3" bind:value={preferredTimes} />
+        <select id="times" class="form-select mb-3" bind:value={preferredTimes}>
+          <option value="">Bitte wählen</option>
+          {#each preferredOptions as opt}
+            <option value={opt}>{opt}</option>
+          {/each}
+        </select>
 
         <label class="form-label" for="contact">Kontakt</label>
-        <input id="contact" class="form-control mb-3" bind:value={contact} />
+        <input id="contact" class="form-control mb-1" bind:value={contact} placeholder="@handle oder E-Mail" />
+        <div class="text-muted small mb-3">Kontakt ist für andere sichtbar, wenn deine Sichtbarkeit dies erlaubt.</div>
 
         <div class="border rounded p-3 mb-3">
           <h6 class="mb-2">Adresse (für Distanz)</h6>
@@ -498,10 +505,11 @@
           <label class="form-check-label" for="allowCode">Suche per Code erlauben (bei Private)</label>
         </div>
 
-        <div class="form-check mb-3">
+        <div class="form-check mb-1">
           <input id="feedOptIn" class="form-check-input" type="checkbox" bind:checked={feedOptIn} />
           <label class="form-check-label" for="feedOptIn">Feed Opt-in</label>
         </div>
+        <div class="text-muted small mb-3">Wenn aktiviert, können Workouts (gemäß Sichtbarkeit) im Feed erscheinen.</div>
 
         <div class="d-flex gap-2 mt-3">
           <button class="btn btn-primary" type="button" onclick={saveProfile} disabled={loading}>

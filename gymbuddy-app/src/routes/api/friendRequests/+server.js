@@ -3,6 +3,7 @@ import { z } from "zod";
 import { ObjectId } from "mongodb";
 import { getDb } from "$lib/server/mongo.js";
 import { assertSafeStrings } from "$lib/server/validation.js";
+import { DEMO_USERS, ensureDemoUsers } from "$lib/server/demoUsers.js";
 
 const sendSchema = z.object({
   toUserId: z.string().trim().min(1)
@@ -29,6 +30,7 @@ export async function GET({ locals }) {
   const col = db.collection("friendRequests");
   const users = db.collection("users");
   await ensureIndexes(db);
+  await ensureDemoUsers(db);
 
   const incoming = await col
     .find({ toUserId: userId, status: "pending" })
@@ -107,10 +109,11 @@ export async function POST({ locals, request }) {
   const users = db.collection("users");
   const blocks = db.collection("blocks");
   await ensureIndexes(db);
+  await ensureDemoUsers(db);
 
   const toUser = await users.findOne(
     { _id: toObjectIdOrNull(toUserId) ?? toUserId },
-    { projection: { friends: 1, profile: 1 } }
+    { projection: { friends: 1, profile: 1, autoAccept: 1 } }
   );
   if (!toUser) return json({ error: "target not found" }, { status: 404 });
 
@@ -155,23 +158,47 @@ export async function POST({ locals, request }) {
   const doc = {
     fromUserId: userId,
     toUserId,
-    status: "pending",
+    status: toUser.autoAccept ? "accepted" : "pending",
     createdAt: now,
     updatedAt: now
   };
   const res = await col.insertOne(doc);
 
-  // maintain legacy arrays
-  await users.updateOne({ _id: toObjectIdOrNull(toUserId) ?? toUserId }, { $addToSet: { friendRequestsIn: userId } });
-  await users.updateOne({ _id: toObjectIdOrNull(userId) ?? userId }, { $addToSet: { friendRequestsOut: toUserId } });
+  if (toUser.autoAccept) {
+    await Promise.all([
+      users.updateOne(
+        { _id: toObjectIdOrNull(toUserId) ?? toUserId },
+        { $addToSet: { friends: userId }, $pull: { friendRequestsIn: userId } }
+      ),
+      users.updateOne(
+        { _id: toObjectIdOrNull(userId) ?? userId },
+        { $addToSet: { friends: toUserId }, $pull: { friendRequestsOut: toUserId } }
+      )
+    ]);
+    try {
+      const { createNotification } = await import("$lib/server/notifications.js");
+      await createNotification(userId, "friend_request_accepted", { byUserId: toUserId });
+    } catch {
+      // ignore notification errors
+    }
+    return json({ ok: true, requestId: String(res.insertedId), autoAccepted: true });
+  } else {
+    await users.updateOne(
+      { _id: toObjectIdOrNull(toUserId) ?? toUserId },
+      { $addToSet: { friendRequestsIn: userId } }
+    );
+    await users.updateOne(
+      { _id: toObjectIdOrNull(userId) ?? userId },
+      { $addToSet: { friendRequestsOut: toUserId } }
+    );
 
-  // notification to target
-  try {
-    const { createNotification } = await import("$lib/server/notifications.js");
-    await createNotification(toUserId, "friend_request_received", { fromUserId: userId });
-  } catch {
-    // ignore notification errors
+    try {
+      const { createNotification } = await import("$lib/server/notifications.js");
+      await createNotification(toUserId, "friend_request_received", { fromUserId: userId });
+    } catch {
+      // ignore notification errors
+    }
+
+    return json({ ok: true, requestId: String(res.insertedId) });
   }
-
-  return json({ ok: true, requestId: String(res.insertedId) });
 }

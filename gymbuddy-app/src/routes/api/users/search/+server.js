@@ -4,6 +4,7 @@ import { getDb } from "$lib/server/mongo.js";
 import { assertSafeStrings } from "$lib/server/validation.js";
 import { ObjectId } from "mongodb";
 import { computeDistanceKm } from "$lib/server/geo.js";
+import { DEMO_USERS, ensureDemoUsers } from "$lib/server/demoUsers.js";
 
 const querySchema = z.object({
   q: z.string().trim().max(120).optional(),
@@ -69,6 +70,8 @@ export async function GET({ locals, url }) {
   const usersCol = db.collection("users");
   const friendReqCol = db.collection("friendRequests");
   const blocksCol = db.collection("blocks");
+  // ensure demo users exist for quick testing / auto-accept
+  await ensureDemoUsers(db);
 
   const meIdStr = String(locals.userId);
   const meId = toObjectIdOrNull(meIdStr) ?? meIdStr;

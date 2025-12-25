@@ -4,7 +4,8 @@
   import { readSession, subscribeSession, csrfHeader } from "$lib/session.js";
 
   let session = $state(readSession());
-  let isAuthenticated = $derived(!!session?.userId);
+  let sessionReady = $state(false);
+  let isAuthenticated = $derived(sessionReady && !!session?.userId);
 
   let searchLoading = $state(false);
   let reqLoading = $state(false);
@@ -251,10 +252,12 @@
   }
 
   onMount(() => {
-    const unsub = subscribeSession((s) => {
+    const unsub = subscribeSession((s, ready) => {
       session = s;
-      if (s?.userId) loadAll();
-      else {
+      sessionReady = ready;
+      if (ready && s?.userId) {
+        loadAll();
+      } else if (ready && !s?.userId) {
         me = null;
         results = [];
         incoming = [];
@@ -273,13 +276,11 @@
 <div class="container py-4">
   <h1 class="mb-3">Gymbuddies</h1>
 
-  {#if !isAuthenticated}
-    <div class="alert alert-warning">
-      Bitte melde dich an, um Gymbuddies zu verwalten.
-    </div>
-    <button class="btn btn-primary" type="button" onclick={() => goto("/profile")}>
-      Zur Anmeldung
-    </button>
+  {#if !sessionReady}
+    <div class="alert alert-info">Lade Session...</div>
+  {:else if !isAuthenticated}
+    <div class="alert alert-warning">Bitte melde dich an, um Gymbuddies zu verwalten.</div>
+    <button class="btn btn-primary" type="button" onclick={() => goto("/profile")}>Zur Anmeldung</button>
   {:else}
     {#if error}
       <div class="alert alert-danger">{error}</div>
