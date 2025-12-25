@@ -57,6 +57,20 @@ export async function POST({ request, cookies }) {
       goals: "",
       preferredTimes: "",
       contact: "",
+      profile: {
+        name: "",
+        gym: "",
+        trainingLevel: "",
+        goals: "",
+        preferredTimes: "",
+        contact: "",
+        visibility: "friends",
+        feedOptIn: false,
+        allowCodeLookup: true
+      },
+      visibility: "friends",
+      feedOptIn: false,
+      allowCodeLookup: true,
 
       // Gamification
       profileBonusGranted: false,

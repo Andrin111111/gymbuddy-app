@@ -1,41 +1,60 @@
-# GymBuddy Testplan (manuell)
+# GymBuddy Testplan (manual)
 
 ## Auth & Session
-- Registrierung: neu anlegen, Erfolgsmeldung, Session-Cookie gesetzt, /api/auth/me -> 200 mit userId.
-- Login: falsches Passwort -> 401, Rate Limit nach >10/IP oder >5/Email in 10min -> 429.
-- Auto-Login-Regression: Ohne Session-Cookie -> /api/auth/me 401, UI zeigt ausgeloggt.
-- Logout: /api/auth/logout -> 200, Cookie gelöscht, /api/auth/me -> 401, UI ausgeloggt.
-- Reload: angemeldet bleiben mit gültiger Session; abgelaufene Session -> 401 und UI Logout.
+- Registration: create new account, success, session cookie set, `/api/auth/me` -> 200 with userId.
+- Login: wrong password -> 401; rate limit after >10/IP or >5/email in 10 min -> 429.
+- Auto-login regression: without session cookie `/api/auth/me` -> 401 and UI shows logged out.
+- Logout: `/api/auth/logout` -> 200, cookie cleared, `/api/auth/me` -> 401, UI logged out.
+- Reload: stays logged in with valid session; expired session -> 401 and UI logout.
+- Netlify fresh visit: no cookie => UI logged out, `/api/auth/me` -> 401.
 
 ## CSRF
-- POST ohne x-csrf-token oder mit falschem Token -> 403 (z.B. /api/profile, /api/trainings, /api/friends/request).
-- POST mit korrektem Token (Cookie == Header) -> 200.
+- POST without `x-csrf-token` or wrong token -> 403 (e.g. `/api/profile`, `/api/trainings`, `/api/friends/request`, workouts/templates/exercises).
+- POST with correct token (cookie == header) -> 200.
 
 ## Profile
-- Profil laden nach Login -> Felder gefüllt inkl. contact.
-- Profil speichern -> Werte persistieren nach Reload; XP-Bonus (30) einmalig, Anzeige konsistent.
+- Load profile after login -> fields populated including `contact`.
+- Save profile -> values persist after reload; XP bonus (30) applied once, UI stays consistent.
 
-## Trainings
-- Training erstellen (mit/ohne Buddy) -> erscheint in Liste, XP/Level/Trainingscount aktualisieren.
-- Training löschen -> Eintrag entfernt, XP/Count dekrementieren entsprechend.
-- Unauth: /api/trainings GET/POST -> 401.
+## Trainings / Workouts
+- Training (legacy) create/delete still works and updates summary.
+- Workout create (with/without buddy) -> appears in list; summary updated.
+- Workout edit -> changes saved; date not shifted; exercises/sets persisted.
+- Workout delete -> entry removed; summary updated.
+- Unauthorized: `/api/workouts` or `/api/trainings` without session -> 401.
+
+## Workouts Extras
+- Exercise catalog loads; custom exercise creation limited to 100/user.
+- Template create/edit/delete; use template to prefill workout.
+- Analytics overview loads weekly workouts/volume and best lifts.
+
+## PR/Stats
+- New PR detected when a set weight exceeds previous best for that exerciseKey; max 2 PR events per workout.
+- After edit/delete, PR cache and volume stay consistent (check `/api/analytics/exercise/{key}`).
 
 ## Buddies/Friends
-- /api/buddies ohne Session -> 401.
-- Mit Session: Liste lädt, Filter (gym, level, buddyCode) funktionieren.
-- Friend Request senden/accept/decline/cancel/remove -> Statusänderungen sichtbar, Limits: >20/Tag -> 429.
+- `/api/buddies` without session -> 401.
+- With session: list loads; filters (gym, level, buddyCode) work.
+- Friend request send/accept/decline/cancel/remove -> status visible; limit >20/day -> 429.
 
 ## Security
-- NoSQL Injection: Strings mit `$` oder `.` in Inputs abweisen (Validations).
-- XSS: Eingaben mit `<script>` bleiben escaped in UI (Spot-check Profile/Notes).
-- Rate Limits: Login/Register per Vorgaben; Friend Request limit greift.
+- NoSQL injection: strings containing `$` or `.` rejected in inputs (profile/buddies/workouts/etc.).
+- XSS: inputs render escaped in UI (spot-check profile/notes/workout names).
+- Rate limits: login/register per spec; friend request limit; search limit >30/min -> 429.
 
 ## Critical Bugs Regression
-- Bug1 Auto-Login: Keine Session -> UI ausgeloggt; /api/auth/me 401.
-- Bug2 Logout: Session/Cookie invalidiert, geschützte APIs 401.
-- Bug3 Profile contact: Speichern/Reload behält contact.
-- Bug4 XP: XP-Anzeigen (Home/Profile/Trainingsliste) spiegeln Serverwerte nach Aktionen.
+- Bug1 auto-login: no session -> UI logged out; `/api/auth/me` 401.
+- Bug2 logout: session/cookie invalidated, protected APIs 401.
+- Bug3 profile contact: save/reload keeps contact value.
+- Bug4 XP display: XP/summary values match server after actions.
 
 ## Build/Deploy
-- `npm run build` grün.
-- Netlify env: MONGODB_URI, MONGODB_DB_NAME, SESSION_SECRET, CSRF_SECRET, APP_ORIGIN gesetzt.
+- `npm run build` green.
+- Netlify env: `MONGODB_URI`, `MONGODB_DB_NAME`, `SESSION_SECRET`, `CSRF_SECRET`, `APP_ORIGIN` set.
+
+## Geo / Distance
+- Save profile with valid address -> geocode succeeds, `geoUpdatedAt` set, distance filter usable.
+- Save profile with invalid address -> address persists, geo cleared, warning shown ("Address saved, location not found").
+- Buddy search with maxDistance and user has geo -> results limited to that radius; computedDistanceKm shown, no raw address/coords in payload.
+- Buddy search with maxDistance but no geo -> filter ignored, hint shown to add address.
+- Buddy search without maxDistance -> users without geo included with "Distanz: unbekannt".

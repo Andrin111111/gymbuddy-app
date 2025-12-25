@@ -2,6 +2,8 @@ import { json } from "@sveltejs/kit";
 import { ObjectId } from "mongodb";
 import { getDb } from "$lib/server/mongo.js";
 import { z } from "zod";
+import { rateLimit } from "$lib/server/rateLimit.js";
+import { assertSafeStrings } from "$lib/server/validation.js";
 
 const querySchema = z.object({
   gym: z.string().max(120).trim().optional(),
@@ -40,6 +42,11 @@ function getBuddyCode(u) {
 export async function GET({ locals, url }) {
   if (!locals.userId) return json({ error: "unauthorized" }, { status: 401 });
 
+  const rlKey = `search:user:${locals.userId}`;
+  if (!rateLimit(rlKey, 30, 60 * 1000)) {
+    return json({ error: "rate limit exceeded" }, { status: 429 });
+  }
+
   const userId = String(locals.userId);
   const meOid = toObjectIdOrNull(userId);
 
@@ -49,6 +56,11 @@ export async function GET({ locals, url }) {
     buddyCode: url.searchParams.get("buddyCode") || undefined
   });
   const filters = parsed.success ? parsed.data : {};
+  try {
+    assertSafeStrings([filters.gym, filters.level, filters.buddyCode].filter(Boolean));
+  } catch {
+    return json({ error: "invalid filter" }, { status: 400 });
+  }
 
   const db = await getDb();
   const users = db.collection("users");

@@ -1,67 +1,36 @@
-# GymBuddy – Repo Audit & Gap Analysis (Post Sprint Baseline)
+﻿# GymBuddy STATUS
 
-## 1. Vorhandene Struktur
-- Pages/Routes: `/`, `/buddies`, `/compare`, `/profile`, `/training`; shared layout `src/routes/+layout.svelte`.
-- APIs: `/api/auth/{register,login,me,logout,delete}`, `/api/profile`, `/api/trainings` (list/create), `/api/trainings/[id]` (delete), `/api/buddies` (list), `/api/friends/{request,accept,decline,cancel,remove}`.
-- Libraries: `src/lib/session.js` (client snapshot + server fetch), `src/lib/server/{mongo.js,env.js,sessions.js,security.js}`, `src/lib/gamification.js`.
+## Current implemented features
+- Pages: Landing (`/`), Buddies (`/buddies`), Compare (`/compare`), Profile (`/profile`), Training (`/training`); shared layout with navbar.
+- Auth: register/login/logout/me/delete endpoints; server-side sessions stored in Mongo (`sessions` with TTL) via `gb_session` httpOnly cookie; CSRF double-submit enforced in `hooks.server`; UI session snapshot kept in `localStorage` and refreshed from `/api/auth/me`.
+- Profile: load/update basic fields (name, gym, trainingLevel, goals, preferredTimes, contact); 30 XP profile bonus applied server-side when complete.
+- Training: full workout CRUD with date, duration, location, buddy (must be a friend), notes, exercises with sets/reps/weight/RPE/warmup flags; workout date normalized to ISO (local day); workout edit/delete adjusts XP delta; training summary returned. Exercise catalog endpoint, custom exercises (per user, max 100), templates CRUD (per user, max 30), owner-only checks and Zod validation on all new endpoints.
+- Workouts analytics/PRs: PR detection (best weight per exerciseKey, max 2 per workout), total volume per workout, userStats cache, weekly workouts/volume, best lifts list, exercise detail endpoint, delete/edit recompute stats.
+- Buddies: list all users with simple client filters (gym/level/code), shows relationships (self/friend/incoming/outgoing); friend requests send/accept/decline/cancel/remove via API.
+- Security controls: CSRF check for mutating requests; Zod validation on auth, profile, trainings, friends, buddies, workouts, exercises, templates, analytics; in-memory rate limits for login (IP/email), register (IP), friend requests (per user), search (per user/min); sessions with httpOnly cookie; safe-string validation to block `$`/`.` in user inputs.
+- Build: `npm run build` succeeds; Netlify adapter configured.
 
-## 2. Aktueller Auth/Session Ansatz
-- Serverseitige Sessions in Mongo (`sessions` Collection, TTL index), Cookie `gb_session`, loaded via `hooks.server`.
-- Client holt Status über `/api/auth/me`, schreibt Snapshot in `localStorage` (nur UI); falsche Logins werden beim Refresh bereinigt.
-- Logout invalidiert Server-Session und Cookie.
-- Kein CSRF-Schutz (fehlte vor dieser Runde).
+## Broken behavior and bugs
+- Friend request UX: relies on manual refresh of list after actions; no in-page status/badge feedback per item beyond reload.
+- XP integrity: XP still basic per-workout increments; no caps (300/workout, 2/day), no streaks/duration/set-based XP; UI messages can diverge from intended spec.
+- In-memory rate limits only; per-instance and non-persistent.
 
-## 3. MongoDB Nutzung
-- `getDb` mit `MONGODB_URI` + `MONGODB_DB_NAME`.
-- Collections verwendet: `users`, `sessions`, `trainings`. Freundschaftsdaten werden in `users` Arrays gespeichert (keine dedizierten Collections).
-- Keine programmatischen Index-Setups außer Sessions-TTL.
+## Missing features mapped to full spec
+- Workouts: no XP caps/streak logic, no buddy suggestions during logging, no leaderboard tie-ins; XP still simple.
+- Matching/Buddies: no search by name with privacy enforcement, no blocks, no privacy visibility (public/friends/private), no suggestion engine with scoring/reason tags, no dedicated friends list/inbox page, no availability/goal filters.
+- Gamification: no XP caps (300/workout, 2 per day), no streaks, no duration/set XP, no ranks/thresholds/icons, no seasons/season XP reset, no achievements catalog/unlock, no XP breakdown.
+- Notifications: none (no friend request/accepted/achievement/etc.).
+- Compare/Leaderboards: only simple table; no season or friends leaderboards.
+- Social optional: no feed/likes/comments, no challenges, no chat, no scheduling/training requests.
+- Security hardening: no persistent rate limit store (Redis), no audit logging; privacy/blocks absent; password hashing uses PBKDF2 (not argon2id).
 
-## 4. UI Screens
-- Landing: Fortschritt-Karte aus `/api/profile`.
-- Profile: Login/Register, Profilfelder (name, gym, trainingLevel, goals, preferredTimes, contact), XP/Level/Trainingscount, 30 XP Bonus-Hinweis.
-- Training: Einfache Trainingsliste, create/delete; XP/Level/Count Anzeige.
-- Buddies: Liste aller Users, Filter clientseitig, Friend-Request Buttons; Fehlermeldung bei fehlendem Profil.
-- Compare: Vergleicht dich mit Freunden (basierend auf buddies-Response).
+## Security gaps (P0)
+- Privacy/blocks/visibility not enforced -> potential data exposure in buddies list/search.
+- No XP caps/streak handling -> progression manipulation possible.
+- Rate limiting is in-memory only (per instance, volatile).
+- Workouts and buddies lack privacy/visibility and block enforcement.
+- No audit logging or persistent rate limit store.
 
-## 5. Was funktioniert
-- Registrierung/Login speichern User (PBKDF2), Sessions werden erstellt (Cookie) und invalidiert bei Logout/Delete.
-- Trainings: create/list/delete, XP wird addiert/abgezogen, Level berechnet.
-- Friend Requests/Freunde: Basis-Endpunkte vorhanden (ohne Limits/Privacy).
-- Build ist grün (lokal `npm run build`).
-
-## 6. Bekannte Probleme (kritisch)
-1) Auto-Login-Gefühl: Client liest evtl. altes `localStorage`, aber `/api/auth/me` liefert 200 mit null → sollte 401; Snapshot könnte bis Refresh widersprüchlich sein.
-2) CSRF fehlt für alle mutierenden Requests.
-3) Input-Validierung fehlt (keine Zod-Schemas), NoSQL-Injection-Schutz fehlt.
-4) Rate Limiting fehlt (Bruteforce möglich).
-5) Privacy/Blocks/Visibility fehlen komplett.
-6) Gamification unvollständig: XP caps, ranks, achievements, seasons, PRs, Templates etc. fehlen.
-7) Buddy-Search/Suggestions/Blocking fehlen.
-8) Workouts sind minimal (keine Exercises/Sets, kein Edit, keine PRs, keine Templates).
-9) Notifications/Analytics/Feed/Challenges/Chat/Scheduling nicht vorhanden.
-
-## 7. Soll vs Ist (Auszug)
-- Sessions/Cookies: teilweise vorhanden, aber kein CSRF, keine Rate Limits.
-- Validation: fehlt; muss mit Zod und Feld-Whitelists umgesetzt werden.
-- Security: CSRF, Rate Limit, AuthZ/Owner-Checks, Privacy/Blocks, Logging-Regeln fehlen.
-- Workouts: fehlen Kernfelder (exercises/sets), Edit/Update, PRs, Templates.
-- Buddy System: keine Suche/Filter/Blocks/Suggestions.
-- Gamification: XP-Regeln, Caps, Ranks/Icons, Seasons, Achievements fehlen.
-- Notifications: fehlt.
-- Tests/Doku: TESTPLAN, SECURITY, README Env fehlen (noch zu ergänzen).
-
-## 8. P0 Security Gaps
-- Keine CSRF-Abwehr.
-- Keine Zod-Validation → NoSQL-Injection-Risiko.
-- Keine Rate Limits.
-- Autorisierung noch schwach: einige Endpunkte nutzen locals.userId, aber Datenmodelle erlauben Fremdzugriff (Buddies/Requests, Workouts minimal).
-- Privacy/Block fehlen → mögliche Datenlecks.
-
-## 9. Nächste Schritte (in dieser Umsetzung)
-- CSRF-Double-Submit-Token einführen.
-- Zod-Validation + NoSQL-Key-Guards für vorhandene Endpunkte (auth/profile/trainings/friends/buddies).
-- Rate Limiting für Login/Register/Friend Requests/Buddies (baseline).
-- `/api/auth/me` 401 bei fehlender Session; Client-Session-Refresh nutzt das.
-- Fix Profile-Save für Kontakt/XP-Kohärenz (bereits angepasst mit serverseitigem Profil-Roundtrip).
-- Docs: SECURITY.md, TESTPLAN.md, README Env/Setup.
-- Keep build green.
+## Geo package
+- Findings before change: Profile had no address or geo fields; buddy search UI distance input was not wired to backend; backend ignored distance entirely and stored no coordinates.
+- Implemented in this package: profile now accepts addressLine1/2, postalCode, city, country; server-side geocoding (OpenCage via `GEOCODING_API_KEY`) with 2dsphere index on `users.geo`, rate-limited (5/hour/user), and coordinates rounded to 2 decimals for privacy. Buddy search applies real distance filtering when user has geo and returns only city/postalCode plus rounded distance (no raw coordinates/addresses). Geo failures keep address text but clear geo and return a warning.

@@ -22,9 +22,15 @@ export async function POST({ locals, cookies }) {
   const db = await getDb();
   const users = db.collection("users");
   const trainings = db.collection("trainings");
+  const workouts = db.collection("workouts");
+  const templates = db.collection("templates");
+  const userExercises = db.collection("userExercises");
   const sessions = db.collection("sessions");
 
   await trainings.deleteMany({ userId });
+  await workouts.deleteMany({ userId });
+  await templates.deleteMany({ userId });
+  await userExercises.deleteMany({ userId });
   await sessions.deleteMany({ userId });
 
   await users.updateMany(

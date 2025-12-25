@@ -11,6 +11,7 @@
    - `SESSION_SECRET` (required)
    - `CSRF_SECRET` (required)
    - `APP_ORIGIN` (required; e.g. https://your-app.netlify.app)
+   - `GEOCODING_API_KEY` (required for address->geo via OpenCage)
    - Optional: `RATE_LIMIT_REDIS_URL`, `EMAIL_SMTP_URL`, `NODE_ENV`
 3. Run dev  
    ```bash
@@ -21,7 +22,7 @@
    npm run build
    ```
 
-## What’s implemented (current baseline)
+## What's implemented (current baseline)
 - Server-side sessions stored in MongoDB with TTL, httpOnly cookie `gb_session`.
 - CSRF double-submit token (`gb_csrf` cookie + `x-csrf-token` header) enforced for mutating requests.
 - Auth endpoints (register/login/logout/me/delete) with rate limits and validation.
@@ -30,6 +31,7 @@
 - Buddies list + client filters; Friend request accept/decline/cancel/remove (no blocks/visibility yet).
 - In-memory rate limits: login/register/friend requests.
 - Input validation via Zod on existing endpoints.
+- Profile address + server geocoding (OpenCage) with rounded coordinates; buddy search can filter by distance (no raw address/coords are exposed, only city/PLZ and approximate km).
 
 ## Missing (future work)
 - Full workout model (exercises/sets, edit, PRs, templates).
@@ -37,6 +39,12 @@
 - XP caps, ranks, seasons, achievements, notifications.
 - Suggestions, feed, challenges, chat, scheduling.
 - Persistent/global rate limiting store.
+- Distance-based matching refinements.
+
+## Geocoding provider
+- Provider: OpenCage (`https://api.opencagedata.com/geocode/v1/json`).
+- Env var: `GEOCODING_API_KEY` (set in Netlify).
+- Privacy: stored geo is rounded (approx), address lines/coords are never returned to other users, only city/PLZ + approx distance.
 
 ## Deployment (Netlify)
 - Adapter: `@sveltejs/adapter-netlify`

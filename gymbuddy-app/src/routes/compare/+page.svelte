@@ -2,84 +2,86 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { readSession, subscribeSession } from "$lib/session.js";
+  import { RANK_ICONS } from "$lib/ranks.config.js";
 
   let session = $state(readSession());
   let isAuthenticated = $derived(!!session?.userId);
 
   let loading = $state(false);
   let error = $state("");
-
-  let me = $state(null);
-  let friends = $state([]);
+  let leaderboard = $state([]);
+  let seasonId = $state("");
+  let lifetime = $state([]);
+  let loadingLifetime = $state(false);
 
   function setError(msg) {
     error = msg || "";
   }
 
-  async function loadCompareData() {
+  function iconFor(key) {
+    return RANK_ICONS[key] || RANK_ICONS.apex;
+  }
+
+  async function loadLeaderboard() {
     setError("");
     loading = true;
-
     try {
-      const res = await fetch("/api/buddies");
+      const res = await fetch("/api/leaderboards/friends/season");
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Vergleichsdaten konnten nicht geladen werden.");
-
-      const myUser = data?.me || data?.user || null;
-      const allUsers = Array.isArray(data?.users) ? data.users : Array.isArray(data) ? data : [];
-
-      me = myUser;
-
-      const friendIds = Array.isArray(myUser?.friends) ? myUser.friends.map(String) : [];
-      friends = allUsers.filter((u) => friendIds.includes(String(u._id || u.id)));
-
-      friends = friends.map((u) => ({
-        ...u,
-        xp: typeof u.xp === "number" ? u.xp : 0,
-        trainingsCount: typeof u.trainingsCount === "number" ? u.trainingsCount : 0,
-        level: typeof u.level === "number" ? u.level : 1
-      }));
-
-      if (me) {
-        me = {
-          ...me,
-          xp: typeof me.xp === "number" ? me.xp : 0,
-          trainingsCount: typeof me.trainingsCount === "number" ? me.trainingsCount : 0,
-          level: typeof me.level === "number" ? me.level : 1
-        };
-      }
+      if (!res.ok) throw new Error(data?.error || "Leaderboard konnte nicht geladen werden.");
+      leaderboard = Array.isArray(data?.users) ? data.users : [];
+      seasonId = data?.seasonId || "";
     } catch (e) {
-      setError(e?.message || "Vergleichsdaten konnten nicht geladen werden.");
-      me = null;
-      friends = [];
+      setError(e?.message || "Leaderboard konnte nicht geladen werden.");
+      leaderboard = [];
+      seasonId = "";
     } finally {
       loading = false;
+    }
+  }
+
+  async function loadLifetime() {
+    loadingLifetime = true;
+    try {
+      const res = await fetch("/api/leaderboards/friends/lifetime");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Leaderboard konnte nicht geladen werden.");
+      lifetime = Array.isArray(data?.users) ? data.users : [];
+    } catch {
+      lifetime = [];
+    } finally {
+      loadingLifetime = false;
     }
   }
 
   onMount(() => {
     const unsub = subscribeSession((s) => {
       session = s;
-      if (s?.userId) loadCompareData();
+      if (s?.userId) {
+        loadLeaderboard();
+        loadLifetime();
+      }
       else {
-        me = null;
-        friends = [];
+        leaderboard = [];
+        seasonId = "";
         error = "";
       }
     });
 
-    if (session?.userId) loadCompareData();
-
+    if (session?.userId) {
+      loadLeaderboard();
+      loadLifetime();
+    }
     return unsub;
   });
 </script>
 
 <div class="container py-4">
-  <h1 class="mb-3">Vergleich mit deinen Gymbuddies</h1>
+  <h1 class="mb-3">Season Leaderboard</h1>
 
   {#if !isAuthenticated}
     <div class="alert alert-warning">
-      Bitte melde dich an, um deinen Fortschritt mit anderen Gymbuddies zu vergleichen.
+      Bitte melde dich an, um das Friends Leaderboard zu sehen.
     </div>
     <button class="btn btn-primary" type="button" onclick={() => goto("/profile")}>
       Zur Anmeldung
@@ -89,60 +91,99 @@
       <div class="alert alert-danger">{error}</div>
     {/if}
 
-    <div class="d-flex gap-2 mb-3">
-      <button class="btn btn-outline-primary" type="button" onclick={loadCompareData} disabled={loading}>
+    <div class="d-flex gap-2 mb-3 align-items-center">
+      <button class="btn btn-outline-primary" type="button" onclick={loadLeaderboard} disabled={loading}>
         Aktualisieren
       </button>
+      {#if seasonId}
+        <span class="badge text-bg-secondary">Season {seasonId}</span>
+      {/if}
     </div>
 
-    {#if loading && !me}
+    {#if loading && leaderboard.length === 0}
       <div class="text-muted">Lade...</div>
-    {:else if !me}
-      <div class="alert alert-danger">Dein Profil konnte nicht geladen werden.</div>
+    {:else if leaderboard.length === 0}
+      <div class="alert alert-info">Keine Eintraege verfuegbar. Lade Freunde ein und logge Workouts.</div>
     {:else}
-      <div class="card mb-4">
+      <div class="card">
         <div class="card-body">
-          <h5 class="card-title mb-2">Du</h5>
-          <div class="row g-2">
-            <div class="col-md-4"><strong>XP:</strong> {me.xp}</div>
-            <div class="col-md-4"><strong>Level:</strong> {me.level}</div>
-            <div class="col-md-4"><strong>Trainings:</strong> {me.trainingsCount}</div>
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="card-title mb-0">Friends Season Leaderboard</h5>
+            <button class="btn btn-outline-primary btn-sm" type="button" onclick={loadLeaderboard} disabled={loading}>
+              Aktualisieren
+            </button>
           </div>
-          <div class="text-muted mt-2">
-            {#if me.gym}Gym: {me.gym}{/if}
-            {#if me.trainingLevel} · Trainingslevel: {me.trainingLevel}{/if}
+          <div class="table-responsive">
+            <table class="table align-middle">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Rank</th>
+                  <th>Name</th>
+                  <th>Season XP</th>
+                  <th>Lifetime XP</th>
+                  <th>Stars</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each leaderboard as entry, idx (entry.userId)}
+                  <tr class={entry.userId === session?.userId ? "table-primary" : ""}>
+                    <td>{idx + 1}</td>
+                    <td>
+                      <div class="d-flex align-items-center gap-2">
+                        <img src={iconFor(entry.rankKey)} alt={entry.rankName} width="32" height="32" />
+                        <span>{entry.rankName}</span>
+                      </div>
+                    </td>
+                    <td class="fw-semibold">{entry.name}</td>
+                    <td>{entry.seasonXp}</td>
+                    <td>{entry.lifetimeXp}</td>
+                    <td>{entry.rankStars}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
 
-      <div class="card">
+      <div class="card mt-3">
         <div class="card-body">
-          <h5 class="card-title mb-3">Deine Freunde</h5>
-
-          {#if friends.length === 0}
-            <div class="text-muted">Du hast noch keine Gymbuddies als Freunde.</div>
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="card-title mb-0">Friends Lifetime Leaderboard</h5>
+            <button class="btn btn-outline-primary btn-sm" type="button" onclick={loadLifetime} disabled={loadingLifetime}>
+              Aktualisieren
+            </button>
+          </div>
+          {#if loadingLifetime && lifetime.length === 0}
+            <div class="text-muted">Lade...</div>
+          {:else if lifetime.length === 0}
+            <div class="text-muted">Keine Eintraege.</div>
           {:else}
             <div class="table-responsive">
               <table class="table align-middle">
                 <thead>
                   <tr>
+                    <th>#</th>
+                    <th>Rank</th>
                     <th>Name</th>
-                    <th>Gym</th>
-                    <th>Trainingslevel</th>
-                    <th>XP</th>
-                    <th>Level</th>
-                    <th>Trainings</th>
+                    <th>Lifetime XP</th>
+                    <th>Stars</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {#each friends as f (f._id || f.id)}
-                    <tr>
-                      <td class="fw-semibold">{f.name || "Unbekannt"}</td>
-                      <td>{f.gym || "—"}</td>
-                      <td>{f.trainingLevel || f.level || "beginner"}</td>
-                      <td>{f.xp}</td>
-                      <td>{f.level}</td>
-                      <td>{f.trainingsCount}</td>
+                  {#each lifetime as entry, idx (entry.userId)}
+                    <tr class={entry.userId === session?.userId ? "table-primary" : ""}>
+                      <td>{idx + 1}</td>
+                      <td>
+                        <div class="d-flex align-items-center gap-2">
+                          <img src={iconFor(entry.rankKey)} alt={entry.rankName} width="32" height="32" />
+                          <span>{entry.rankName}</span>
+                        </div>
+                      </td>
+                      <td class="fw-semibold">{entry.name}</td>
+                      <td>{entry.lifetimeXp}</td>
+                      <td>{entry.rankStars}</td>
                     </tr>
                   {/each}
                 </tbody>

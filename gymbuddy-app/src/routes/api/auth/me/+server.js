@@ -20,8 +20,14 @@ export async function GET({ locals }) {
   const users = db.collection("users");
 
   const user = oid
-    ? await users.findOne({ _id: oid }, { projection: { email: 1, buddyCode: 1 } })
-    : await users.findOne({ _id: locals.userId }, { projection: { email: 1, buddyCode: 1 } });
+    ? await users.findOne(
+        { _id: oid },
+        { projection: { email: 1, buddyCode: 1, xp: 1, lifetimeXp: 1, seasonXp: 1, trainingsCount: 1 } }
+      )
+    : await users.findOne(
+        { _id: locals.userId },
+        { projection: { email: 1, buddyCode: 1, xp: 1, lifetimeXp: 1, seasonXp: 1, trainingsCount: 1 } }
+      );
 
   if (!user) {
     return json({ userId: null, email: null, buddyCode: null });
@@ -30,6 +36,10 @@ export async function GET({ locals }) {
   return json({
     userId: String(user._id),
     email: user.email ?? null,
-    buddyCode: user.buddyCode ?? null
+    buddyCode: user.buddyCode ?? null,
+    xp: Number(user.lifetimeXp ?? user.xp ?? 0),
+    lifetimeXp: Number(user.lifetimeXp ?? user.xp ?? 0),
+    seasonXp: Number(user.seasonXp ?? user.lifetimeXp ?? user.xp ?? 0),
+    trainingsCount: Number(user.trainingsCount ?? 0)
   });
 }

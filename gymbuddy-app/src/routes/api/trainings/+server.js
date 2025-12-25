@@ -2,7 +2,8 @@ import { json } from "@sveltejs/kit";
 import { ObjectId } from "mongodb";
 import { z } from "zod";
 import { getDb } from "$lib/server/mongo.js";
-import { calculateTrainingXp, calculateLevel } from "$lib/gamification.js";
+import { calculateLevel } from "$lib/gamification.js";
+import { assertSafeStrings } from "$lib/server/validation.js";
 
 const trainingSchema = z.object({
   date: z.string().max(32),
@@ -36,7 +37,7 @@ export async function GET({ locals }) {
   const oid = toObjectIdOrNull(userId);
   const user = oid ? await usersCol.findOne({ _id: oid }) : await usersCol.findOne({ _id: userId });
 
-  const xp = Number(user?.xp ?? 0);
+  const xp = Number(user?.lifetimeXp ?? user?.xp ?? 0);
   const trainingsCount = Number(user?.trainingsCount ?? trainings.length);
   const level = calculateLevel(xp);
 
@@ -70,8 +71,13 @@ export async function POST({ locals, request }) {
   const withBuddy = Boolean(parsed.data.withBuddy);
   const buddyName = String(parsed.data.buddyName ?? "").trim();
   const notes = String(parsed.data.notes ?? "").trim();
+  try {
+    assertSafeStrings([date, buddyName, notes]);
+  } catch {
+    return json({ error: "invalid characters" }, { status: 400 });
+  }
 
-  const xpGain = calculateTrainingXp(withBuddy);
+  const xpGain = 0;
 
   const db = await getDb();
   const trainingsCol = db.collection("trainings");
@@ -96,16 +102,10 @@ export async function POST({ locals, request }) {
     createdAt: now
   });
 
-  await usersCol.updateOne(
-    oid ? { _id: oid } : { _id: userId },
-    {
-      $inc: { xp: xpGain, trainingsCount: 1 },
-      $set: { updatedAt: now }
-    }
-  );
+  await usersCol.updateOne(oid ? { _id: oid } : { _id: userId }, { $set: { updatedAt: now } });
 
   const user = oid ? await usersCol.findOne({ _id: oid }) : await usersCol.findOne({ _id: userId });
-  const xp = Number(user?.xp ?? 0);
+  const xp = Number(user?.lifetimeXp ?? user?.xp ?? 0);
   const trainingsCount = Number(user?.trainingsCount ?? 0);
   const level = calculateLevel(xp);
 
