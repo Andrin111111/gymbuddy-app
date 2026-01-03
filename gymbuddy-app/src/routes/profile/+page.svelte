@@ -242,9 +242,10 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Registrierung fehlgeschlagen.");
 
-      writeSession({ userId: data.userId, email: data.email, buddyCode: data.buddyCode });
+      const newSession = { userId: data.userId, email: data.email, buddyCode: data.buddyCode };
+      writeSession(newSession);
+      session = newSession;
       await refreshSession();
-      session = readSession();
       mode = "profile";
       await loadProfile();
     } catch (e) {
@@ -270,9 +271,10 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Login fehlgeschlagen.");
 
-      writeSession({ userId: data.userId, email: data.email, buddyCode: data.buddyCode });
+      const newSession = { userId: data.userId, email: data.email, buddyCode: data.buddyCode };
+      writeSession(newSession);
+      session = newSession;
       await refreshSession();
-      session = readSession();
       mode = "profile";
       await loadProfile();
     } catch (e) {

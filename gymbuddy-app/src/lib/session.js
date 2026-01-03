@@ -1,28 +1,31 @@
 // src/lib/session.js
+// Client-side session helper: keeps a local snapshot of the server session (httpOnly cookie-backed).
 
-// We no longer trust localStorage for auth state. Source of truth is the server
-// session (httpOnly cookie). These helpers only provide a client snapshot after
-// confirming with /api/auth/me.
+let currentSession = null;
+let readyFlag = false;
 
 export function readSession() {
-  return null;
+  return currentSession;
 }
 
-export function writeSession() {
-  // no-op: session is derived from server cookie only
+export function writeSession(session) {
+  currentSession = session ?? null;
+  readyFlag = true;
+  notifySessionChanged();
 }
 
 export function clearSession() {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem("GYMBUDDY-ATH");
-  } catch {}
-  try {
-    window.localStorage.removeItem("gymbuddy-session");
-    window.localStorage.removeItem("gymbuddy-auth");
-    window.localStorage.removeItem("gymbuddy-session-key");
-    window.localStorage.removeItem("gymbuddy-session-v1");
-  } catch {}
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.removeItem("GYMBUDDY-ATH");
+      window.localStorage.removeItem("gymbuddy-session");
+      window.localStorage.removeItem("gymbuddy-auth");
+      window.localStorage.removeItem("gymbuddy-session-key");
+      window.localStorage.removeItem("gymbuddy-session-v1");
+    } catch {}
+  }
+  currentSession = null;
+  readyFlag = true;
   notifySessionChanged();
 }
 
@@ -33,11 +36,9 @@ function notifySessionChanged() {
 
 async function fetchServerSession() {
   if (typeof window === "undefined") return null;
-
   try {
     const res = await fetch("/api/auth/me", { method: "GET" });
     if (!res.ok) return null;
-
     const data = await res.json().catch(() => null);
     if (data?.userId) {
       return {
@@ -46,7 +47,6 @@ async function fetchServerSession() {
         buddyCode: data.buddyCode ?? ""
       };
     }
-
     return null;
   } catch {
     return null;
@@ -54,30 +54,31 @@ async function fetchServerSession() {
 }
 
 export async function refreshSession() {
-  return fetchServerSession();
+  const session = await fetchServerSession();
+  currentSession = session;
+  readyFlag = true;
+  notifySessionChanged();
+  return session;
 }
 
 /**
- * Fuer Pages: callback sofort + bei Login/Logout updaten, holt echten Status vom Server.
+ * callback(session, ready)
+ * ready == true sobald ein Server-Check erfolgt ist.
  */
 export function subscribeSession(callback) {
   if (typeof window === "undefined") return () => {};
 
-  let latest = null;
-  let ready = false;
-  const emit = () => callback(latest, ready);
-
+  const emit = () => callback(currentSession, readyFlag);
   const onCustom = () => emit();
   const onStorage = () => emit();
 
   window.addEventListener("gymbuddy-session-changed", onCustom);
   window.addEventListener("storage", onStorage);
 
-  // start as loading; emit once ready to avoid false "not logged in" flicker
   emit();
   fetchServerSession().then((s) => {
-    latest = s;
-    ready = true;
+    currentSession = s;
+    readyFlag = true;
     emit();
   });
 
@@ -87,7 +88,6 @@ export function subscribeSession(callback) {
   };
 }
 
-// Alias fuer bestehende Importe (altes Naming)
 export const onSessionChange = subscribeSession;
 
 function parseCookie(name) {

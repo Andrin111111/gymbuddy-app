@@ -41,7 +41,6 @@
   }
 
   function cloneForm(form) {
-    if (typeof structuredClone === "function") return structuredClone(form);
     return JSON.parse(JSON.stringify(form));
   }
 
@@ -955,7 +954,7 @@
           </div>
         </div>
 
-        <div class="card shadow-soft">
+        <div class="card shadow-soft d-none" aria-hidden="true">
           <div class="card-body p-4">
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
               <h6 class="card-title mb-0">{editingTemplateId ? "Vorlage bearbeiten" : "Vorlage erstellen"}</h6>
