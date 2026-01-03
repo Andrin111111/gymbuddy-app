@@ -32,6 +32,39 @@ const BUDDIES = [
     contact: "luca@example.com",
     code: "GB-LS3",
     xp: 620
+  },
+  {
+    id: "buddy-4",
+    name: "Mara Keller",
+    gym: "LetziFit ZǬrich",
+    level: "Intermediate",
+    focus: "Functional & HIIT",
+    trainingTimes: "Morgen",
+    contact: "@marak",
+    code: "GB-MK4",
+    xp: 880
+  },
+  {
+    id: "buddy-5",
+    name: "Jonas Frei",
+    gym: "NonStop Gym Bern",
+    level: "Advanced",
+    focus: "Hypertrophie",
+    trainingTimes: "Abend",
+    contact: "jonas.frei@mail.ch",
+    code: "GB-JF5",
+    xp: 1540
+  },
+  {
+    id: "buddy-6",
+    name: "Lea Schmid",
+    gym: "FitOne Basel",
+    level: "Beginner",
+    focus: "Allgemeine Fitness",
+    trainingTimes: "Wochenende",
+    contact: "@lea_s",
+    code: "GB-LS6",
+    xp: 410
   }
 ];
 

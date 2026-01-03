@@ -1100,7 +1100,7 @@
       </div>
     </div>
 
-    <div class="row g-4 mt-1">
+    <div class="row g-4 mt-0">
       <div class="col-lg-8">
         <div class="card shadow-soft">
           <div class="card-body p-4">

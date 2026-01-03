@@ -299,7 +299,7 @@
           preferredTimes,
           contact,
           visibility,
-          allowCodeLookup: true,
+          allowCodeLookup,
           postalCode,
           city,
           country
@@ -563,7 +563,6 @@
             <input
               id="contact"
               class="form-control"
-              inputmode="email"
               bind:value={contact}
               placeholder="@handle oder E-Mail"
             />
@@ -730,3 +729,4 @@
     </div>
   {/if}
 </div>
+

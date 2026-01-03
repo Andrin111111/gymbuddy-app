@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { readSession, subscribeSession, csrfHeader } from "$lib/session.js";
+  import { listBuddies } from "$lib/buddies.js";
 
   let session = $state(readSession());
   let sessionReady = $state(false);
@@ -11,7 +12,10 @@
   let reqLoading = $state(false);
   let friendsLoading = $state(false);
   let blockLoading = $state(false);
-  let error = $state("");
+  let searchError = $state("");
+  let requestsError = $state("");
+  let friendsError = $state("");
+  let blocksError = $state("");
   let hasSearched = $state(false);
 
   let me = $state(null);
@@ -28,14 +32,25 @@
   let maxDistanceKm = $state("");
   let distanceInfo = $state(null);
 
-  function setError(msg) {
-    error = msg || "";
-  }
+  const demoBuddies = $state(
+    listBuddies().map((b) => ({
+      _id: b.id,
+      name: b.name,
+      gym: b.gym,
+      trainingLevel: b.level,
+      buddyCode: b.code,
+      visibility: "public",
+      city: "",
+      postalCode: "",
+      computedDistanceKm: null,
+      relationship: "none"
+    }))
+  );
 
   async function loadSearch() {
     if (!session?.userId) return;
     hasSearched = true;
-    setError("");
+    searchError = "";
     searchLoading = true;
     try {
       const params = new URLSearchParams();
@@ -51,9 +66,12 @@
       me = data?.me || null;
       results = Array.isArray(data?.results) ? data.results : [];
       distanceInfo = data?.distanceInfo || null;
+      if (results.length === 0 && !q && !buddyCodeFilter && !gymFilter && !levelFilter && !maxDistanceKm) {
+        results = demoBuddies;
+      }
     } catch (e) {
-      setError(e?.message || "Suche fehlgeschlagen.");
-      results = [];
+      searchError = e?.message || "Suche fehlgeschlagen. Zeige Demo-Buddies.";
+      results = demoBuddies;
       distanceInfo = null;
     } finally {
       searchLoading = false;
@@ -70,7 +88,7 @@
       incoming = Array.isArray(data?.incoming) ? data.incoming : [];
       outgoing = Array.isArray(data?.outgoing) ? data.outgoing : [];
     } catch (e) {
-      setError(e?.message || "Anfragen konnten nicht geladen werden.");
+      requestsError = e?.message || "Anfragen konnten nicht geladen werden.";
       incoming = [];
       outgoing = [];
     } finally {
@@ -87,7 +105,7 @@
       if (!res.ok) throw new Error(data?.error || "Freunde konnten nicht geladen werden.");
       friends = Array.isArray(data?.friends) ? data.friends : [];
     } catch (e) {
-      setError(e?.message || "Freunde konnten nicht geladen werden.");
+      friendsError = e?.message || "Freunde konnten nicht geladen werden.";
       friends = [];
     } finally {
       friendsLoading = false;
@@ -103,7 +121,7 @@
       if (!res.ok) throw new Error(data?.error || "Blockliste konnte nicht geladen werden.");
       blocks = Array.isArray(data?.blocks) ? data.blocks : [];
     } catch (e) {
-      setError(e?.message || "Blockliste konnte nicht geladen werden.");
+      blocksError = e?.message || "Blockliste konnte nicht geladen werden.";
       blocks = [];
     } finally {
       blockLoading = false;
@@ -290,10 +308,6 @@
     <div class="alert alert-warning mb-3">Bitte melde dich an, um Gymbuddies zu verwalten.</div>
     <button class="btn btn-primary" type="button" onclick={() => goto("/profile")}>Zur Anmeldung</button>
   {:else}
-    {#if error}
-      <div class="alert alert-danger mb-3">{error}</div>
-    {/if}
-
     <div class="card shadow-soft mb-3">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -305,6 +319,9 @@
             Suchen
           </button>
         </div>
+        {#if searchError}
+          <div class="alert alert-danger mb-2">{searchError}</div>
+        {/if}
         <div class="row g-3">
           <div class="col-md-6">
             <label class="form-label" for="q">Name/E-Mail</label>
@@ -422,6 +439,9 @@
           <div class="section-title m-0">Freundschaftsanfragen</div>
           <button class="btn btn-outline-primary btn-sm" type="button" onclick={loadRequests} disabled={reqLoading}>Aktualisieren</button>
         </div>
+        {#if requestsError}
+          <div class="alert alert-warning mb-2">{requestsError}</div>
+        {/if}
         <div class="row g-3">
           <div class="col-md-6">
             <h6>Eingehend</h6>
@@ -478,6 +498,9 @@
           <h5 class="card-title m-0">Freunde</h5>
           <button class="btn btn-outline-primary btn-sm" type="button" onclick={loadFriends} disabled={friendsLoading}>Aktualisieren</button>
         </div>
+        {#if friendsError}
+          <div class="alert alert-warning mb-2">{friendsError}</div>
+        {/if}
         {#if friendsLoading && friends.length === 0}
           <div class="text-muted">Lade...</div>
         {:else if friends.length === 0}
@@ -507,6 +530,9 @@
           <h5 class="card-title m-0">Blockierte Nutzer</h5>
           <button class="btn btn-outline-primary btn-sm" type="button" onclick={loadBlocks} disabled={blockLoading}>Aktualisieren</button>
         </div>
+        {#if blocksError}
+          <div class="alert alert-warning mb-2">{blocksError}</div>
+        {/if}
         {#if blockLoading && blocks.length === 0}
           <div class="text-muted">Lade...</div>
         {:else if blocks.length === 0}
