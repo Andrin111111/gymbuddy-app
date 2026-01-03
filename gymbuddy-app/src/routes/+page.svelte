@@ -1,7 +1,13 @@
 <script>
+  import { onMount } from "svelte";
+  import { readSession, subscribeSession } from "$lib/session.js";
+
   let { data } = $props();
 
-  let isAuthenticated = $derived(data?.isAuthenticated ?? false);
+  let session = $state(readSession());
+  let sessionReady = $state(false);
+  let clientAuthenticated = $derived(sessionReady && !!session?.userId);
+  let isAuthenticated = $derived(clientAuthenticated || (data?.isAuthenticated ?? false));
   let stats = $derived(data?.stats ?? { xp: 0, level: 1, trainingsCount: 0 });
   let suggestions = $derived(data?.suggestions ?? []);
 
@@ -9,6 +15,14 @@
   let clientSuggestions = $state(null); // überschreibt Server-Daten falls vorhanden
   let suggestionsError = $state("");
   let lastFetchTs = $state(0);
+
+  onMount(() => {
+    const unsub = subscribeSession((s, ready) => {
+      session = s;
+      sessionReady = ready;
+    });
+    return unsub;
+  });
 
   async function refreshSuggestions() {
     const now = Date.now();

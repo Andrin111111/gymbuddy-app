@@ -541,7 +541,6 @@
       if (s?.userId) {
         loadCatalog();
         loadWorkouts();
-        loadTemplates();
         loadFriends();
         loadBuddySuggestions();
         loadAnalytics();
@@ -558,7 +557,6 @@
     if (session?.userId) {
       loadCatalog();
       loadWorkouts();
-      loadTemplates();
       loadFriends();
       loadBuddySuggestions();
       loadAnalytics();
@@ -570,8 +568,8 @@
 <div class="page-shell py-4 px-3">
   <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-3">
     <div>
-      <h1 class="mb-1">Workouts &amp; Vorlagen</h1>
-      <p class="muted-subtitle mb-0">Tracke Sessions, nutze Vorlagen und behalte deine Kennzahlen im Blick.</p>
+      <h1 class="mb-1">Workouts</h1>
+      <p class="muted-subtitle mb-0">Tracke deine Sessions und behalte deine Kennzahlen im Blick.</p>
     </div>
     {#if isAuthenticated}
       <div class="pill">
@@ -662,47 +660,32 @@
                   onchange={(e) => (workoutForm = { ...workoutForm, buddyUserId: e.target.value })}
                 >
                   <option value="">Kein Buddy</option>
-                  {#each friends as f}
-                    <option value={f.id}>{f.name}</option>
-                  {/each}
+                  {#if friends.length > 0}
+                    <optgroup label="Freunde">
+                      {#each friends as f}
+                        <option value={f.id}>{f.name}</option>
+                      {/each}
+                    </optgroup>
+                  {/if}
+                  {#if buddySuggestions.length > 0}
+                    <optgroup label="Vorschläge">
+                      {#each buddySuggestions as s (s.userId)}
+                        <option value={s.userId}>{s.name}</option>
+                      {/each}
+                    </optgroup>
+                  {/if}
                 </select>
                 {#if loadingFriends}
                   <div class="text-muted small mt-1">Freunde werden geladen...</div>
                 {/if}
-                {#if suggestionsError}
-                  <div class="text-danger small mt-1">{suggestionsError}</div>
-                {/if}
                 {#if suggestionsLoading}
                   <div class="text-muted small mt-1">Buddy Vorschläge werden geladen...</div>
                 {/if}
-                {#if buddySuggestions.length > 0}
-                  <div class="mt-2">
-                    <div class="fw-semibold small mb-1">Vorschläge</div>
-                    <div class="vstack gap-2">
-                      {#each buddySuggestions as s (s.userId)}
-                        <div class="border rounded p-2">
-                          <div class="d-flex justify-content-between align-items-start gap-2">
-                            <div>
-                              <div class="fw-semibold">{s.name}</div>
-                              <div class="text-muted small">Score {s.score}</div>
-                              <div class="text-muted small">
-                                {#each s.tags as tag, i (i)}
-                                  <span class="badge text-bg-light me-1 mb-1">{tag}</span>
-                                {/each}
-                              </div>
-                            </div>
-                            <button
-                              class="btn btn-outline-primary btn-sm"
-                              type="button"
-                              onclick={() => (workoutForm = { ...workoutForm, buddyUserId: s.userId })}
-                            >
-                              wählen
-                            </button>
-                          </div>
-                        </div>
-                      {/each}
-                    </div>
-                  </div>
+                {#if !loadingFriends && !suggestionsLoading && friends.length === 0 && buddySuggestions.length === 0}
+                  <div class="text-muted small mt-1">Noch keine Buddies verfügbar.</div>
+                {/if}
+                {#if suggestionsError}
+                  <div class="text-danger small mt-1">{suggestionsError}</div>
                 {/if}
               </div>
               <div class="col-12">
@@ -1193,7 +1176,7 @@
       </div>
 
       <div class="col-lg-4">
-        <div class="card shadow-soft">
+        <div class="card shadow-soft d-none" aria-hidden="true">
           <div class="card-body p-4">
             <div class="d-flex justify-content-between align-items-center mb-2">
               <h5 class="card-title mb-0">Vorlagen</h5>

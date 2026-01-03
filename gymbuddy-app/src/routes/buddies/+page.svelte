@@ -12,6 +12,7 @@
   let friendsLoading = $state(false);
   let blockLoading = $state(false);
   let error = $state("");
+  let hasSearched = $state(false);
 
   let me = $state(null);
   let results = $state([]);
@@ -33,6 +34,7 @@
 
   async function loadSearch() {
     if (!session?.userId) return;
+    hasSearched = true;
     setError("");
     searchLoading = true;
     try {
@@ -248,7 +250,7 @@
   }
 
   async function loadAll() {
-    await Promise.all([loadSearch(), loadRequests(), loadFriends(), loadBlocks()]);
+    await Promise.all([loadRequests(), loadFriends(), loadBlocks()]);
   }
 
   onMount(() => {
@@ -265,6 +267,7 @@
         friends = [];
         blocks = [];
         error = "";
+        hasSearched = false;
       }
     });
 
@@ -351,6 +354,8 @@
         <div class="section-title mb-3">Gefundene Accounts</div>
         {#if searchLoading}
           <div class="skeleton" style="height: 110px;"></div>
+        {:else if !hasSearched}
+          <div class="empty-state">Noch keine Suche ausgeführt.</div>
         {:else if results.length === 0}
           <div class="empty-state">Keine passenden Buddies.</div>
         {:else}

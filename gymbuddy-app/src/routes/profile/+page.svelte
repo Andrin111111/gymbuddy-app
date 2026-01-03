@@ -446,7 +446,7 @@
         </div>
 
         <div class="text-muted small mt-3">
-          Nach dem Login kannst du Profil und Achievements anpassen.
+          Passwortanforderungen: mindestens 8 Zeichen, eine Zahl und ein Sonderzeichen.
         </div>
       </div>
     </div>
