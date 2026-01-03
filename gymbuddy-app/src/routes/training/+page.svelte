@@ -1,4 +1,4 @@
-﻿<script>
+<script>
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { readSession, subscribeSession, csrfHeader } from "$lib/session.js";
@@ -568,32 +568,42 @@
     return () => unsub();
   });
 </script>
-<div class="container py-4">
-  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-    <h1 class="mb-0">Workouts &amp; Vorlagen</h1>
+<div class="page-shell py-4 px-3">
+  <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <h1 class="mb-1">Workouts &amp; Vorlagen</h1>
+      <p class="muted-subtitle mb-0">Tracke Sessions, nutze Vorlagen und behalte deine Kennzahlen im Blick.</p>
+    </div>
     {#if isAuthenticated}
-      <div class="text-muted small">
-        Level {summary.level} - XP {summary.xp} - Trainings {summary.trainingsCount}
+      <div class="pill">
+        <span>Level {summary.level}</span>
+        <span class="badge text-bg-light">XP {summary.xp}</span>
+        <span class="badge text-bg-light">Trainings {summary.trainingsCount}</span>
       </div>
     {/if}
   </div>
 
   {#if !isAuthenticated}
-    <div class="alert alert-warning">
-      Bitte melde dich an, um Workouts zu erfassen und Vorlagen zu nutzen.
+    <div class="card shadow-soft">
+      <div class="card-body p-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div>
+          <h5 class="mb-1">Bitte einloggen</h5>
+          <p class="text-muted mb-0">Melde dich an, um Workouts zu erfassen und Vorlagen zu nutzen.</p>
+        </div>
+        <button class="btn btn-primary" type="button" onclick={() => goto("/profile")}>
+          Zur Anmeldung
+        </button>
+      </div>
     </div>
-    <button class="btn btn-primary" type="button" onclick={() => goto("/profile")}>
-      Zur Anmeldung
-    </button>
   {:else}
     {#if loadError}
-      <div class="alert alert-danger">{loadError}</div>
+      <div class="error-banner mb-3">{loadError}</div>
     {/if}
 
     <div class="row g-4">
       <div class="col-lg-8">
-        <div class="card">
-          <div class="card-body">
+        <div class="card shadow-soft">
+          <div class="card-body p-4">
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
               <div>
                 <h5 class="card-title mb-1">{editingWorkoutId ? "Workout bearbeiten" : "Workout erfassen"}</h5>
@@ -605,7 +615,7 @@
             </div>
 
             {#if workoutError}
-              <div class="alert alert-danger py-2">{workoutError}</div>
+              <div class="error-banner mb-3">{workoutError}</div>
             {/if}
 
             <div class="row g-3 mb-3">
@@ -683,7 +693,7 @@
                               </div>
                             </div>
                             <button
-                              class="btn btn-outline-success btn-sm"
+                              class="btn btn-outline-primary btn-sm"
                               type="button"
                               onclick={() => (workoutForm = { ...workoutForm, buddyUserId: s.userId })}
                             >
@@ -842,26 +852,45 @@
       </div>
 
       <div class="col-lg-4">
-        <div class="card mb-3">
-          <div class="card-body">
-            <h5 class="card-title mb-2">Dein Fortschritt</h5>
-            <div>Level: {summary.level}</div>
-            <div>XP: {summary.xp}</div>
-            <div>Trainings gesamt: {summary.trainingsCount}</div>
-            <div class="text-muted small mt-2">
-              XP-Logik bleibt simpel, detaillierte Ranks &amp; Caps folgen in spaeteren Paketen.
+        <div class="card shadow-soft mb-3">
+          <div class="card-body p-4">
+            <h5 class="card-title mb-3">Dein Fortschritt</h5>
+            <div class="stat-grid mb-2">
+              <div class="stat-tile">
+                <div class="label">Level</div>
+                <div class="value">{summary.level}</div>
+              </div>
+              <div class="stat-tile">
+                <div class="label">XP gesamt</div>
+                <div class="value">{summary.xp}</div>
+              </div>
+              <div class="stat-tile">
+                <div class="label">Trainings</div>
+                <div class="value">{summary.trainingsCount}</div>
+              </div>
+            </div>
+            <div class="text-muted small">
+              XP-Logik bleibt simpel, detaillierte Ranks &amp; Caps folgen in späteren Paketen.
             </div>
           </div>
         </div>
 
-        <div class="card mb-3">
-          <div class="card-body">
-            <h6 class="card-title mb-2">Wochen-Analytics</h6>
+        <div class="card shadow-soft mb-3">
+          <div class="card-body p-4">
+            <h6 class="card-title mb-3">Wochen-Analytics</h6>
             {#if analyticsError}
-              <div class="alert alert-danger py-2">{analyticsError}</div>
+              <div class="error-banner mb-2">{analyticsError}</div>
             {/if}
-            <div>Workouts diese Woche: {analytics.workoutsThisWeek}</div>
-            <div>Volumen diese Woche: {analytics.totalVolumeThisWeek.toFixed(0)} kg</div>
+            <div class="stat-grid mb-2">
+              <div class="stat-tile">
+                <div class="label">Workouts diese Woche</div>
+                <div class="value">{analytics.workoutsThisWeek}</div>
+              </div>
+              <div class="stat-tile">
+                <div class="label">Volumen diese Woche</div>
+                <div class="value">{analytics.totalVolumeThisWeek.toFixed(0)} kg</div>
+              </div>
+            </div>
             <div class="mt-2">
               <div class="fw-semibold mb-1">Best Lifts</div>
               {#if analytics.bestLifts.length === 0}
@@ -877,11 +906,11 @@
           </div>
         </div>
 
-        <div class="card mb-3">
-          <div class="card-body">
+        <div class="card shadow-soft mb-3">
+          <div class="card-body p-4">
             <h6 class="card-title mb-2">Eigene Übung anlegen</h6>
             {#if customExerciseError}
-              <div class="alert alert-danger py-2">{customExerciseError}</div>
+              <div class="error-banner mb-2">{customExerciseError}</div>
             {/if}
             <div class="mb-2">
               <label class="form-label form-label-sm" for="customName">Name</label>
@@ -926,8 +955,8 @@
           </div>
         </div>
 
-        <div class="card">
-          <div class="card-body">
+        <div class="card shadow-soft">
+          <div class="card-body p-4">
             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
               <h6 class="card-title mb-0">{editingTemplateId ? "Vorlage bearbeiten" : "Vorlage erstellen"}</h6>
               {#if editingTemplateId}
@@ -935,7 +964,7 @@
               {/if}
             </div>
             {#if templateError}
-              <div class="alert alert-danger py-2">{templateError}</div>
+              <div class="error-banner mb-2">{templateError}</div>
             {/if}
             <div class="mb-2">
               <label class="form-label form-label-sm" for="templateName">Name</label>
@@ -1091,8 +1120,8 @@
 
     <div class="row g-4 mt-1">
       <div class="col-lg-8">
-        <div class="card">
-          <div class="card-body">
+        <div class="card shadow-soft">
+          <div class="card-body p-4">
             <div class="d-flex justify-content-between align-items-center mb-2">
               <h5 class="card-title mb-0">Gespeicherte Workouts</h5>
               <span class="text-muted small">{workouts.length} Einträge</span>
@@ -1101,7 +1130,7 @@
             {#if loadingWorkouts}
               <div class="text-muted">Lade Workouts...</div>
             {:else if workouts.length === 0}
-              <div class="text-muted">Noch keine Workouts erfasst.</div>
+              <div class="empty-state">Noch keine Workouts erfasst.</div>
             {:else}
               <div class="list-group">
                 {#each workouts as w (w._id)}
@@ -1165,8 +1194,8 @@
       </div>
 
       <div class="col-lg-4">
-        <div class="card">
-          <div class="card-body">
+        <div class="card shadow-soft">
+          <div class="card-body p-4">
             <div class="d-flex justify-content-between align-items-center mb-2">
               <h5 class="card-title mb-0">Vorlagen</h5>
               <span class="text-muted small">{templates.length} gespeichert</span>
@@ -1174,7 +1203,7 @@
             {#if loadingTemplates}
               <div class="text-muted">Lade Vorlagen...</div>
             {:else if templates.length === 0}
-              <div class="text-muted">Noch keine Vorlagen.</div>
+              <div class="empty-state">Noch keine Vorlagen.</div>
             {:else}
               <div class="list-group">
                 {#each templates as t (t._id)}

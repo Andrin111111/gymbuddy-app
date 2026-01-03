@@ -1,4 +1,4 @@
-<script>
+﻿<script>
   import { onMount } from "svelte";
 
   let { data } = $props();
@@ -45,8 +45,7 @@
 
 {#if !isAuthenticated}
   <div class="alert alert-warning mt-3">
-    Bitte melde dich an, um Details von Gymbuddies zu sehen und Verbindungen zu
-    verwalten.
+    Bitte melde dich an, um Details von Gymbuddies zu sehen und Verbindungen zu verwalten.
   </div>
   <a href="/profile" class="btn btn-primary mt-2">Zur Anmeldung</a>
 {:else}
@@ -87,11 +86,7 @@
   </div>
 
   <div class="mt-3 d-flex align-items-center gap-3">
-    <button
-      type="button"
-      class="btn btn-primary"
-      onclick={toggleConnection}
-    >
+    <button type="button" class="btn btn-primary" onclick={toggleConnection}>
       {#if isConnected}
         Verbindung entfernen
       {:else}
@@ -100,10 +95,9 @@
     </button>
 
     {#if isConnected}
-      <span class="text-success">Du bist mit diesem Buddy verknüpft ✅</span>
+      <span class="text-success">Du bist mit diesem Buddy verknüpft ✔️</span>
     {/if}
   </div>
 
   <a href="/buddies" class="btn btn-link mt-3">&laquo; Zurück zur Übersicht</a>
 {/if}
-

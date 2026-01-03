@@ -65,11 +65,9 @@ export async function POST({ request, cookies }) {
         preferredTimes: "",
         contact: "",
         visibility: "friends",
-        feedOptIn: false,
         allowCodeLookup: true
       },
       visibility: "friends",
-      feedOptIn: false,
       allowCodeLookup: true,
 
       // Gamification

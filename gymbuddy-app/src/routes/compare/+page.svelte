@@ -1,4 +1,4 @@
-﻿<script>
+<script>
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { readSession, subscribeSession } from "$lib/session.js";
@@ -77,13 +77,21 @@
   });
 </script>
 
-<div class="container py-4">
-  <h1 class="mb-3">Season Leaderboard</h1>
+<div class="page-shell py-3">
+  <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start gap-2 mb-3">
+    <div>
+      <h1 class="mb-1">Season Leaderboard</h1>
+      <p class="muted-subtitle mb-0">Vergleiche dich mit deinen Freunden – Season und Lifetime XP.</p>
+    </div>
+    {#if seasonId}
+      <span class="pill">Season {seasonId}</span>
+    {/if}
+  </div>
 
   {#if !sessionReady}
     <div class="alert alert-info">Lade Session...</div>
   {:else if !isAuthenticated}
-    <div class="alert alert-warning">
+    <div class="alert alert-warning mb-3">
       Bitte melde dich an, um das Friends Leaderboard zu sehen.
     </div>
     <button class="btn btn-primary" type="button" onclick={() => goto("/profile")}>
@@ -94,21 +102,23 @@
       <div class="alert alert-danger">{error}</div>
     {/if}
 
-    <div class="d-flex gap-2 mb-3 align-items-center">
-      <button class="btn btn-outline-primary" type="button" onclick={loadLeaderboard} disabled={loading}>
-        Aktualisieren
-      </button>
-      {#if seasonId}
-        <span class="badge text-bg-secondary">Season {seasonId}</span>
-      {/if}
+    <div class="card p-3 shadow-soft mb-3">
+      <div class="d-flex align-items-center gap-2">
+        <button class="btn btn-outline-primary" type="button" onclick={loadLeaderboard} disabled={loading}>
+          Aktualisieren
+        </button>
+        {#if seasonId}
+          <span class="badge text-bg-secondary">Season {seasonId}</span>
+        {/if}
+      </div>
     </div>
 
     {#if loading && leaderboard.length === 0}
-      <div class="text-muted">Lade...</div>
+      <div class="skeleton" style="height: 140px;"></div>
     {:else if leaderboard.length === 0}
-      <div class="alert alert-info">Keine Einträge verfügbar. Lade Freunde ein und logge Workouts.</div>
+      <div class="empty-state">Keine Einträge verfügbar. Lade Freunde ein und logge Workouts.</div>
     {:else}
-      <div class="card">
+      <div class="card shadow-soft mb-3">
         <div class="card-body">
           <div class="d-flex justify-content-between align-items-center mb-3">
             <h5 class="card-title mb-0">Friends Season Leaderboard</h5>
@@ -150,7 +160,7 @@
         </div>
       </div>
 
-      <div class="card mt-3">
+      <div class="card shadow-soft">
         <div class="card-body">
           <div class="d-flex justify-content-between align-items-center mb-3">
             <h5 class="card-title mb-0">Friends Lifetime Leaderboard</h5>
@@ -159,9 +169,9 @@
             </button>
           </div>
           {#if loadingLifetime && lifetime.length === 0}
-            <div class="text-muted">Lade...</div>
+            <div class="skeleton" style="height: 100px;"></div>
           {:else if lifetime.length === 0}
-            <div class="text-muted">Keine Einträge.</div>
+            <div class="empty-state">Keine Einträge.</div>
           {:else}
             <div class="table-responsive">
               <table class="table align-middle">
@@ -198,9 +208,3 @@
     {/if}
   {/if}
 </div>
-
-
-
-
-
-

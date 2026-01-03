@@ -273,24 +273,37 @@
   });
 </script>
 
-<div class="container py-4">
-  <h1 class="mb-3">Gymbuddies</h1>
+<div class="page-shell py-3">
+  <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start gap-2 mb-3">
+    <div>
+      <h1 class="mb-1">Gymbuddies</h1>
+      <p class="muted-subtitle mb-0">Suche, Anfragen, Freunde und Blockliste im Überblick.</p>
+    </div>
+  </div>
 
   {#if !sessionReady}
     <div class="alert alert-info">Lade Session...</div>
   {:else if !isAuthenticated}
-    <div class="alert alert-warning">Bitte melde dich an, um Gymbuddies zu verwalten.</div>
+    <div class="alert alert-warning mb-3">Bitte melde dich an, um Gymbuddies zu verwalten.</div>
     <button class="btn btn-primary" type="button" onclick={() => goto("/profile")}>Zur Anmeldung</button>
   {:else}
     {#if error}
-      <div class="alert alert-danger">{error}</div>
+      <div class="alert alert-danger mb-3">{error}</div>
     {/if}
 
-  <div class="card mb-4">
-    <div class="card-body">
-      <h5 class="card-title mb-3">Suche</h5>
-      <div class="row g-3">
-        <div class="col-md-6">
+    <div class="card shadow-soft mb-3">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div>
+            <div class="section-title mb-1">Suche</div>
+            <div class="muted-subtitle">Filtere nach Name, Gym, Level oder Distanz.</div>
+          </div>
+          <button class="btn btn-outline-primary btn-sm" type="button" onclick={loadSearch} disabled={searchLoading}>
+            Suchen
+          </button>
+        </div>
+        <div class="row g-3">
+          <div class="col-md-6">
             <label class="form-label" for="q">Name/E-Mail</label>
             <input id="q" class="form-control" placeholder="Name oder Email" bind:value={q} />
           </div>
@@ -302,55 +315,52 @@
             <label class="form-label" for="gym">Gym</label>
             <input id="gym" class="form-control" placeholder="z.B. Activ" bind:value={gymFilter} />
           </div>
-        <div class="col-md-6">
-          <label class="form-label" for="level">Level</label>
-          <select id="level" class="form-select" bind:value={levelFilter}>
-            <option value="">Alle</option>
-            <option value="beginner">Beginner</option>
-            <option value="intermediate">Intermediate</option>
-            <option value="advanced">Advanced</option>
-          </select>
-        </div>
-        <div class="col-md-6">
-          <label class="form-label" for="distance">Maximale Distanz (km)</label>
-          <input
-            id="distance"
-            class="form-control"
-            type="number"
-            min="1"
-            max="500"
-            placeholder="z.B. 10"
-            bind:value={maxDistanceKm}
-          />
-          <div class="form-text">
-            Distanzfilter funktioniert nur, wenn du deine Adresse im Profil hinterlegt hast.
+          <div class="col-md-6">
+            <label class="form-label" for="level">Level</label>
+            <select id="level" class="form-select" bind:value={levelFilter}>
+              <option value="">Alle</option>
+              <option value="beginner">Beginner</option>
+              <option value="intermediate">Intermediate</option>
+              <option value="advanced">Advanced</option>
+            </select>
           </div>
-          {#if distanceInfo?.ignoredReason === "missing-geo" && maxDistanceKm}
-            <div class="text-warning small mt-1">Adresse fehlt – Distanzfilter wurde ignoriert.</div>
-          {/if}
+          <div class="col-md-6">
+            <label class="form-label" for="distance">Maximale Distanz (km)</label>
+            <input
+              id="distance"
+              class="form-control"
+              type="number"
+              min="1"
+              max="500"
+              placeholder="z.B. 10"
+              bind:value={maxDistanceKm}
+            />
+            <div class="form-text">
+              Distanzfilter funktioniert nur, wenn du deine Adresse im Profil hinterlegt hast.
+            </div>
+            {#if distanceInfo?.ignoredReason === "missing-geo" && maxDistanceKm}
+              <div class="text-warning small mt-1">Adresse fehlt – Distanzfilter wurde ignoriert.</div>
+            {/if}
+          </div>
         </div>
       </div>
-      <button class="btn btn-outline-primary mt-3" type="button" onclick={loadSearch} disabled={searchLoading}>
-        Suchen
-      </button>
-    </div>
     </div>
 
-    <div class="card mb-4">
+    <div class="card shadow-soft mb-3">
       <div class="card-body">
-        <h5 class="card-title mb-3">Gefundene Accounts</h5>
+        <div class="section-title mb-3">Gefundene Accounts</div>
         {#if searchLoading}
-          <div class="text-muted">Lade...</div>
+          <div class="skeleton" style="height: 110px;"></div>
         {:else if results.length === 0}
-          <div class="text-muted">Keine passenden Buddies.</div>
+          <div class="empty-state">Keine passenden Buddies.</div>
         {:else}
           <div class="list-group">
             {#each results as u (u._id)}
               <div class="list-group-item d-flex justify-content-between align-items-start gap-3">
                 <div class="flex-grow-1">
                   <div class="fw-semibold">{u.name || "Unbekannt"}</div>
-                  <div class="text-muted">Gym: {u.gym || "n/a"} | Level: {u.trainingLevel || "n/a"}</div>
-                  <div class="text-muted">
+                  <div class="text-muted small">Gym: {u.gym || "n/a"} | Level: {u.trainingLevel || "n/a"}</div>
+                  <div class="text-muted small">
                     ID: {u.buddyCode || "n/a"} | Sichtbarkeit: {u.visibility}
                     {#if u.city || u.postalCode}
                       | {u.postalCode} {u.city}
@@ -381,7 +391,7 @@
                     </div>
                   {:else if relationshipFor(u) === "outgoing"}
                     <button class="btn btn-outline-secondary btn-sm" type="button" onclick={() => cancelRequest(outgoing.find((r) => r.toUserId === u._id)?._id)} disabled={reqLoading}>
-                      Anfrage zurueckziehen
+                      Anfrage zurückziehen
                     </button>
                   {:else}
                     <div class="d-flex gap-2">
@@ -401,10 +411,10 @@
       </div>
     </div>
 
-    <div class="card mb-4">
+    <div class="card shadow-soft mb-3">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
-          <h5 class="card-title m-0">Freundschaftsanfragen</h5>
+          <div class="section-title m-0">Freundschaftsanfragen</div>
           <button class="btn btn-outline-primary btn-sm" type="button" onclick={loadRequests} disabled={reqLoading}>Aktualisieren</button>
         </div>
         <div class="row g-3">
@@ -413,7 +423,7 @@
             {#if reqLoading && incoming.length === 0}
               <div class="text-muted">Lade...</div>
             {:else if incoming.length === 0}
-              <div class="text-muted">Keine eingehenden Anfragen.</div>
+              <div class="empty-state">Keine eingehenden Anfragen.</div>
             {:else}
               <div class="list-group">
                 {#each incoming as r (r._id)}
@@ -436,7 +446,7 @@
             {#if reqLoading && outgoing.length === 0}
               <div class="text-muted">Lade...</div>
             {:else if outgoing.length === 0}
-              <div class="text-muted">Keine ausgehenden Anfragen.</div>
+              <div class="empty-state">Keine ausgehenden Anfragen.</div>
             {:else}
               <div class="list-group">
                 {#each outgoing as r (r._id)}
@@ -446,7 +456,7 @@
                       <div class="text-muted small">ID: {r.user?.buddyCode || r.toUserId}</div>
                     </div>
                     <button class="btn btn-outline-secondary btn-sm" type="button" onclick={() => cancelRequest(r._id)} disabled={reqLoading}>
-                      Anfrage zurueckziehen
+                      Anfrage zurückziehen
                     </button>
                   </div>
                 {/each}
@@ -457,7 +467,7 @@
       </div>
     </div>
 
-    <div class="card mb-4">
+    <div class="card shadow-soft mb-3">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
           <h5 class="card-title m-0">Freunde</h5>
@@ -466,7 +476,7 @@
         {#if friendsLoading && friends.length === 0}
           <div class="text-muted">Lade...</div>
         {:else if friends.length === 0}
-          <div class="text-muted">Noch keine Freunde.</div>
+          <div class="empty-state">Noch keine Freunde.</div>
         {:else}
           <div class="list-group">
             {#each friends as f (f._id)}
@@ -486,7 +496,7 @@
       </div>
     </div>
 
-    <div class="card mb-4">
+    <div class="card shadow-soft">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
           <h5 class="card-title m-0">Blockierte Nutzer</h5>
@@ -495,7 +505,7 @@
         {#if blockLoading && blocks.length === 0}
           <div class="text-muted">Lade...</div>
         {:else if blocks.length === 0}
-          <div class="text-muted">Keine blockierten Nutzer.</div>
+          <div class="empty-state">Keine blockierten Nutzer.</div>
         {:else}
           <div class="list-group">
             {#each blocks as b (b._id)}

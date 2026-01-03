@@ -41,7 +41,6 @@ function sanitizeProfile(u) {
     contact: String(p.contact ?? u?.contact ?? "").trim(),
     visibility: p.visibility || "friends",
     allowCodeLookup: p.allowCodeLookup !== false,
-    feedOptIn: p.feedOptIn === true,
     city: String(p.city ?? "").trim(),
     postalCode: String(p.postalCode ?? "").trim()
   };

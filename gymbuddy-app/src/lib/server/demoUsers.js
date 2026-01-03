@@ -1,4 +1,4 @@
-ï»¿// src/lib/server/demoUsers.js
+// src/lib/server/demoUsers.js
 
 export const DEMO_USERS = [
   {
@@ -13,7 +13,6 @@ export const DEMO_USERS = [
       preferredTimes: "Abend",
       contact: "@demo1",
       visibility: "public",
-      feedOptIn: false,
       allowCodeLookup: true,
       postalCode: "8400",
       city: "Winterthur",
@@ -27,16 +26,15 @@ export const DEMO_USERS = [
     buddyCode: "900222",
     profile: {
       name: "Autoaccept Demo 2",
-      gym: "City Gym ZÃ¼rich",
+      gym: "City Gym Zürich",
       trainingLevel: "advanced",
       goals: "Strength, Powerlifting",
       preferredTimes: "Morgen",
       contact: "@demo2",
       visibility: "public",
-      feedOptIn: false,
       allowCodeLookup: true,
       postalCode: "8000",
-      city: "ZÃ¼rich",
+      city: "Zürich",
       country: "CH",
       autoAccept: true
     }
@@ -53,7 +51,6 @@ export const DEMO_USERS = [
       preferredTimes: "Wochenende",
       contact: "@demo3",
       visibility: "public",
-      feedOptIn: false,
       allowCodeLookup: true,
       postalCode: "8404",
       city: "Winterthur",
@@ -76,7 +73,6 @@ export async function ensureDemoUsers(db) {
             buddyCode: u.buddyCode,
             profile: u.profile,
             visibility: u.profile.visibility,
-            feedOptIn: u.profile.feedOptIn,
             allowCodeLookup: u.profile.allowCodeLookup,
             autoAccept: true,
             friends: [],
@@ -90,7 +86,7 @@ export async function ensureDemoUsers(db) {
                   coordinates:
                     u.profile.city === "Winterthur"
                       ? [8.724, 47.498]
-                      : u.profile.city === "ZÃ¼rich"
+                      : u.profile.city === "Zürich"
                       ? [8.5417, 47.3769]
                       : [8.55, 47.38]
                 }
@@ -102,7 +98,6 @@ export async function ensureDemoUsers(db) {
           $set: {
             profile: u.profile,
             visibility: u.profile.visibility,
-            feedOptIn: u.profile.feedOptIn,
             allowCodeLookup: u.profile.allowCodeLookup
           }
         },

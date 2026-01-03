@@ -1,6 +1,5 @@
-﻿<script>
+<script>
   import { onMount } from "svelte";
-  import { goto } from "$app/navigation";
   import { readSession, writeSession, clearSession, subscribeSession, refreshSession, csrfHeader } from "$lib/session.js";
   import { RANK_ICONS } from "$lib/ranks.config.js";
   const ACHIEVEMENT_ICONS = import.meta.glob("$lib/assets/achievements/*.svg", { as: "url", eager: true });
@@ -25,7 +24,6 @@
   let contact = $state("");
   let visibility = $state("friends");
   let allowCodeLookup = $state(true);
-  let feedOptIn = $state(false);
   let postalCode = $state("");
   let city = $state("");
   let country = $state("CH");
@@ -61,8 +59,7 @@
   const NOTIFICATION_LABELS = {
     friend_request_received: "Neue Freundschaftsanfrage",
     friend_request_accepted: "Freundschaft akzeptiert",
-    achievement_unlocked: "Achievement freigeschaltet",
-    season_award: "Season Auszeichnung"
+    achievement_unlocked: "Achievement freigeschaltet"
   };
   const preferredOptions = ["Morgen", "Mittag", "Abend", "Wochenende", "Flexibel"];
 
@@ -101,9 +98,8 @@
     if (n.type === "friend_request_accepted" && p.byUserId) return `${resolveName(p.byUserId, "Buddy")} hat angenommen`;
     if (n.type === "achievement_unlocked" && p.key) {
       const a = achievements.find((x) => x.key === p.key);
-      return a ? `${a.title} – ${a.description || ""}` : `Achievement: ${p.key}`;
+      return a ? `${a.title} - ${a.description || ""}` : `Achievement: ${p.key}`;
     }
-    if (n.type === "season_award" && p.placement) return `Season Platz ${p.placement}`;
     if (Object.keys(p).length === 0) return "Keine weiteren Details.";
     try {
       return JSON.stringify(p);
@@ -186,7 +182,7 @@
     }
   }
 
-  async function loadProfile() {
+  async function loadProfile(withExtras = true) {
     setError("");
     loading = true;
     try {
@@ -205,22 +201,24 @@
       contact = profile?.contact ?? "";
       visibility = profile?.visibility ?? "friends";
       allowCodeLookup = profile?.allowCodeLookup ?? true;
-      feedOptIn = profile?.feedOptIn ?? false;
       postalCode = profile?.postalCode ?? "";
       city = profile?.city ?? "";
       country = profile?.country ?? "CH";
-      geoUpdatedAt = data?.geoUpdatedAt ?? null;
-      geoStatus = "";
+      geoUpdatedAt = profile?.geoUpdatedAt ?? null;
+      geoStatus = profile?.geoMessage ?? "";
 
-      xp = data?.xp ?? profile?.xp ?? 0;
-      lifetimeXp = data?.lifetimeXp ?? xp;
-      seasonXp = data?.seasonXp ?? 0;
-      level = data?.level ?? profile?.level ?? 1;
-      trainingsCount = data?.trainingsCount ?? profile?.trainingsCount ?? 0;
-      profileBonusApplied = !!(data?.profileBonusApplied ?? profile?.profileBonusApplied);
-      await loadRank();
-      await loadAchievements();
-      await loadNotifications();
+      xp = profile?.xp ?? 0;
+      lifetimeXp = profile?.lifetimeXp ?? xp;
+      seasonXp = profile?.seasonXp ?? 0;
+      level = profile?.level ?? 1;
+      trainingsCount = profile?.trainingsCount ?? 0;
+      profileBonusApplied = !!profile?.profileBonusApplied;
+
+      if (withExtras) {
+        loadRank();
+        loadAchievements();
+        loadNotifications();
+      }
     } catch (e) {
       setError(e?.message || "Profil konnte nicht geladen werden.");
     } finally {
@@ -231,9 +229,7 @@
   async function doRegister() {
     setError("");
 
-    if (!email.trim() || !password) return setError("Bitte E-Mail und Passwort ausfuellen.");
-    if (password.length < 6) return setError("Passwort muss mindestens 6 Zeichen haben.");
-    if (password !== password2) return setError("Passwoerter stimmen nicht ueberein.");
+    if (password !== password2) return setError("Passwörter stimmen nicht überein.");
 
     loading = true;
     try {
@@ -261,7 +257,7 @@
   async function doLogin() {
     setError("");
 
-    if (!email.trim() || !password) return setError("Bitte E-Mail und Passwort ausfuellen.");
+    if (!email.trim() || !password) return setError("Bitte E-Mail und Passwort ausfüllen.");
 
     loading = true;
     try {
@@ -301,7 +297,6 @@
           preferredTimes,
           contact,
           visibility,
-          feedOptIn,
           allowCodeLookup,
           postalCode,
           city,
@@ -331,7 +326,7 @@
   }
 
   async function deleteAccount() {
-    const ok = confirm("Account wirklich loeschen?");
+    const ok = confirm("Account wirklich löschen?");
     if (!ok) return;
 
     setError("");
@@ -340,14 +335,14 @@
       const res = await fetch("/api/auth/delete", { method: "POST", headers: { ...csrfHeader() } });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Account konnte nicht geloescht werden.");
+      if (!res.ok) throw new Error(data?.error || "Account konnte nicht gelöscht werden.");
 
       clearSession();
       await refreshSession();
       session = readSession();
       mode = "login";
     } catch (e) {
-      setError(e?.message || "Account konnte nicht geloescht werden.");
+      setError(e?.message || "Account konnte nicht gelöscht werden.");
     } finally {
       loading = false;
     }
@@ -358,10 +353,7 @@
       session = s;
       if (s?.userId) {
         mode = "profile";
-        loadProfile();
-        loadRank();
-        loadAchievements();
-        loadNotifications();
+        loadProfile(true);
       } else {
         mode = "login";
       }
@@ -369,40 +361,41 @@
 
     if (session?.userId) {
       mode = "profile";
-      loadProfile();
-      loadRank();
-      loadAchievements();
-      loadNotifications();
+      loadProfile(true);
     }
 
     return unsubscribe;
   });
 </script>
 
-<div class="container py-4">
-  <h1 class="mb-1">Mein GymBuddy-Profil</h1>
-
-  {#if isAuthenticated}
-    <div class="text-muted mb-4">
-      Angemeldet als <strong>{session?.email}</strong>
-      {#if buddyCode}
-        <span class="ms-3">ID: <strong>{buddyCode}</strong></span>
-      {/if}
+<div class="page-shell py-4 px-3">
+  <div class="d-flex align-items-start justify-content-between flex-wrap gap-3 mb-3">
+    <div>
+      <h1 class="mb-1">Mein GymBuddy-Profil</h1>
+      <p class="muted-subtitle mb-0">Login, Privatsphäre und Fortschritt im modernen Look.</p>
     </div>
-  {/if}
+    {#if isAuthenticated}
+      <div class="pill">
+        <span>{session?.email}</span>
+        {#if buddyCode}
+          <span class="badge text-bg-light">Buddy-ID {buddyCode}</span>
+        {/if}
+      </div>
+    {/if}
+  </div>
 
   {#if error}
-    <div class="alert alert-danger">{error}</div>
+    <div class="error-banner mb-3">{error}</div>
   {/if}
 
   {#if loading}
-    <div class="alert alert-info">Lade...</div>
+    <div class="success-banner mb-3">Lade ...</div>
   {/if}
 
   {#if !isAuthenticated}
-    <div class="card mb-3">
-      <div class="card-body">
-        <div class="d-flex gap-2 mb-3">
+    <div class="card shadow-soft">
+      <div class="card-body p-4">
+        <div class="d-flex gap-2 mb-4">
           <button
             class={"btn " + (mode === "login" ? "btn-primary" : "btn-outline-primary")}
             type="button"
@@ -419,35 +412,45 @@
           </button>
         </div>
 
-        <div class="mb-3">
-          <label class="form-label" for="email">E-Mail</label>
-          <input id="email" class="form-control" type="email" bind:value={email} />
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label" for="pw">Passwort</label>
-          <input id="pw" class="form-control" type="password" bind:value={password} />
-        </div>
-
-        {#if mode === "register"}
-          <div class="mb-3">
-            <label class="form-label" for="pw2">Passwort wiederholen</label>
-            <input id="pw2" class="form-control" type="password" bind:value={password2} />
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label" for="email">E-Mail</label>
+            <input id="email" class="form-control" type="email" bind:value={email} placeholder="name@mail.ch" />
           </div>
 
-          <button class="btn btn-success" type="button" onclick={doRegister} disabled={loading}>
-            Account erstellen
-          </button>
-        {:else}
-          <button class="btn btn-success" type="button" onclick={doLogin} disabled={loading}>
-            Einloggen
-          </button>
-        {/if}
+          <div class="col-12">
+            <label class="form-label" for="pw">Passwort</label>
+            <input id="pw" class="form-control" type="password" bind:value={password} />
+          </div>
+
+          {#if mode === "register"}
+            <div class="col-12">
+              <label class="form-label" for="pw2">Passwort wiederholen</label>
+              <input id="pw2" class="form-control" type="password" bind:value={password2} />
+            </div>
+
+            <div class="col-12 d-flex gap-2">
+              <button class="btn btn-primary" type="button" onclick={doRegister} disabled={loading}>
+                Account erstellen
+              </button>
+            </div>
+          {:else}
+            <div class="col-12 d-flex gap-2">
+              <button class="btn btn-primary" type="button" onclick={doLogin} disabled={loading}>
+                Einloggen
+              </button>
+            </div>
+          {/if}
+        </div>
+
+        <div class="text-muted small mt-3">
+          Nach dem Login kannst du Profil und Achievements anpassen.
+        </div>
       </div>
     </div>
   {:else}
     {#if rankInfo}
-      <div class="card mb-3">
+      <div class="card card-gamification mb-3">
         <div class="card-body d-flex align-items-center gap-3 flex-wrap">
           <img src={rankIcon(rankInfo.key)} alt={rankInfo.name} width="56" height="56" />
           <div class="flex-grow-1">
@@ -456,13 +459,13 @@
                 <div class="fw-semibold">
                   {rankInfo.name} {rankInfo.stars > 0 ? `(Apex ${rankInfo.stars}*)` : ""}
                 </div>
-                <div class="text-muted small">Lifetime XP: {rankInfo.lifetimeXp} / Season XP: {rankInfo.seasonXp}</div>
+                <div class="text-muted small">Lifetime XP: {rankInfo.lifetimeXp} - Season XP: {rankInfo.seasonXp}</div>
               </div>
               {#if rankInfo.seasonId}
-                <span class="badge text-bg-secondary">Season {rankInfo.seasonId}</span>
+                <span class="badge text-bg-info">Season {rankInfo.seasonId}</span>
               {/if}
             </div>
-            <div class="progress mt-2" style="height: 8px;">
+            <div class="progress mt-2">
               <div
                 class="progress-bar"
                 role="progressbar"
@@ -484,116 +487,165 @@
       </div>
     {/if}
 
-    <div class="card">
-      <div class="card-body">
-        <label class="form-label" for="name">Name / Nickname</label>
-        <input id="name" class="form-control mb-3" bind:value={name} />
+    <div class="card shadow-soft mb-4">
+      <div class="card-body p-4">
+        <div class="d-flex justify-content-between align-items-start mb-3">
+          <div>
+            <h5 class="mb-1">Profil &amp; Sichtbarkeit</h5>
+            <div class="text-muted small">Stammdaten, Ziele und Erreichbarkeit.</div>
+          </div>
+          <div class="d-flex flex-wrap gap-2">
+            <span class="badge text-bg-light">Level {level}</span>
+            <span class="badge text-bg-light">Trainings {trainingsCount}</span>
+          </div>
+        </div>
 
-        <label class="form-label" for="gym">Gym / Standort</label>
-        <input id="gym" class="form-control mb-3" bind:value={gym} />
+        <div class="stat-grid mb-4">
+          <div class="stat-tile">
+            <div class="label">Level</div>
+            <div class="value">{level}</div>
+          </div>
+          <div class="stat-tile">
+            <div class="label">Lifetime XP</div>
+            <div class="value">{lifetimeXp}</div>
+          </div>
+          <div class="stat-tile">
+            <div class="label">Season XP</div>
+            <div class="value">{seasonXp}</div>
+          </div>
+        </div>
 
-        <label class="form-label" for="levelSelect">Trainingslevel</label>
-        <select id="levelSelect" class="form-select mb-3" bind:value={trainingLevel}>
-          <option value="beginner">Beginner</option>
-          <option value="intermediate">Intermediate</option>
-          <option value="advanced">Advanced</option>
-        </select>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label" for="name">Name / Nickname</label>
+            <input id="name" class="form-control" bind:value={name} placeholder="Dein Anzeigename" />
+          </div>
 
-        <label class="form-label" for="goals">Trainingsziele</label>
-        <textarea id="goals" class="form-control mb-3" rows="2" bind:value={goals}></textarea>
+          <div class="col-md-6">
+            <label class="form-label" for="gym">Gym / Standort</label>
+            <input id="gym" class="form-control" bind:value={gym} placeholder="z.B. Basefit Zürich" />
+          </div>
 
-        <label class="form-label" for="times">Bevorzugte Zeiten</label>
-        <select id="times" class="form-select mb-3" bind:value={preferredTimes}>
-          <option value="">Bitte wÃ¤hlen</option>
-          {#each preferredOptions as opt}
-            <option value={opt}>{opt}</option>
-          {/each}
-        </select>
+          <div class="col-md-6">
+            <label class="form-label" for="levelSelect">Trainingslevel</label>
+            <select id="levelSelect" class="form-select" bind:value={trainingLevel}>
+              <option value="beginner">Beginner</option>
+              <option value="intermediate">Intermediate</option>
+              <option value="advanced">Advanced</option>
+            </select>
+          </div>
 
-        <label class="form-label" for="contact">Kontakt</label>
-        <input id="contact" class="form-control mb-1" bind:value={contact} placeholder="@handle oder E-Mail" />
-        <div class="text-muted small mb-3">Kontakt ist für andere sichtbar, wenn deine Sichtbarkeit dies erlaubt.</div>
+          <div class="col-md-6">
+            <label class="form-label" for="times">Bevorzugte Zeiten</label>
+            <select id="times" class="form-select" bind:value={preferredTimes}>
+              <option value="">Bitte wählen</option>
+              {#each preferredOptions as opt}
+                <option value={opt}>{opt}</option>
+              {/each}
+            </select>
+          </div>
 
-        <div class="border rounded p-3 mb-3">
-          <h6 class="mb-2">Adresse (für Distanz)</h6>
-          <p class="text-muted small mb-2">
-            Nur PLZ, Ort und Land. Andere sehen nur eine ungefähre Distanz (keine genaue Adresse).
-          </p>
-          <div class="row g-2">
-            <div class="col-4">
-              <label class="form-label" for="postal">PLZ</label>
-              <input
-                id="postal"
-                class="form-control mb-2"
-                bind:value={postalCode}
-                maxlength="12"
-                oninput={(e) => autoFillFromZip(e.target.value)}
-              />
-            </div>
-            <div class="col-8">
-              <label class="form-label" for="city">Ort</label>
-              <input
-                id="city"
-                class="form-control mb-2"
-                bind:value={city}
-                maxlength="50"
-                oninput={(e) => autoFillFromCity(e.target.value)}
-              />
+          <div class="col-12">
+            <label class="form-label" for="goals">Trainingsziele</label>
+            <textarea
+              id="goals"
+              class="form-control"
+              rows="2"
+              bind:value={goals}
+              placeholder="z.B. Hypertrophie, Ausdauer, Gewichtsreduktion"
+            ></textarea>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label" for="contact">Kontakt</label>
+            <input
+              id="contact"
+              class="form-control"
+              bind:value={contact}
+              placeholder="@handle oder E-Mail"
+            />
+            <div class="text-muted small mt-1">
+              Kontakt ist für andere sichtbar, wenn deine Sichtbarkeit dies erlaubt.
             </div>
           </div>
-          <label class="form-label" for="country">Land</label>
-          <input id="country" class="form-control mb-2" bind:value={country} maxlength="50" />
-          <div class="text-muted small mb-2">Bekannte Beispiele: 8400 Winterthur, 8000 Zuerich.</div>
-          {#if geoStatus}
-            <div class="alert alert-info py-2 my-2">{geoStatus}</div>
-          {/if}
-          {#if geoUpdatedAt}
-            <div class="text-muted small">Letzte Geolokalisierung: {new Date(geoUpdatedAt).toLocaleString()}</div>
-          {/if}
+
+          <div class="col-12">
+            <div class="border rounded p-3">
+              <h6 class="mb-2">Adresse (für Distanz)</h6>
+              <p class="text-muted small mb-3">
+                Nur PLZ, Ort und Land. Andere sehen nur eine ungefähre Distanz (keine genaue Adresse).
+              </p>
+              <div class="row g-2">
+                <div class="col-sm-4">
+                  <label class="form-label" for="postal">PLZ</label>
+                  <input
+                    id="postal"
+                    class="form-control"
+                    bind:value={postalCode}
+                    maxlength="12"
+                    oninput={(e) => autoFillFromZip(e.target.value)}
+                  />
+                </div>
+                <div class="col-sm-8">
+                  <label class="form-label" for="city">Ort</label>
+                  <input
+                    id="city"
+                    class="form-control"
+                    bind:value={city}
+                    maxlength="50"
+                    oninput={(e) => autoFillFromCity(e.target.value)}
+                  />
+                </div>
+              </div>
+              <label class="form-label mt-2" for="country">Land</label>
+              <input id="country" class="form-control" bind:value={country} maxlength="50" />
+              <div class="text-muted small mt-1">Bekannte Beispiele: 8400 Winterthur, 8000 Zürich.</div>
+              {#if geoStatus}
+                <div class="success-banner py-2 my-2">{geoStatus}</div>
+              {/if}
+              {#if geoUpdatedAt}
+                <div class="text-muted small">Letzte Geolokalisierung: {new Date(geoUpdatedAt).toLocaleString()}</div>
+              {/if}
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label" for="visibility">Sichtbarkeit</label>
+            <select id="visibility" class="form-select" bind:value={visibility}>
+              <option value="public">Öffentlich</option>
+              <option value="friends">Nur Freunde</option>
+              <option value="private">Privat</option>
+            </select>
+          </div>
+
+          <div class="col-md-6 d-flex align-items-end">
+            <div class="form-check">
+              <input id="allowCode" class="form-check-input" type="checkbox" bind:checked={allowCodeLookup} />
+              <label class="form-check-label" for="allowCode">Suche per Code erlauben (bei Privat)</label>
+            </div>
+          </div>
         </div>
 
-        <label class="form-label" for="visibility">Sichtbarkeit</label>
-        <select id="visibility" class="form-select mb-3" bind:value={visibility}>
-          <option value="public">Public</option>
-          <option value="friends">Friends Only</option>
-          <option value="private">Private</option>
-        </select>
-
-        <div class="form-check mb-2">
-          <input id="allowCode" class="form-check-input" type="checkbox" bind:checked={allowCodeLookup} />
-          <label class="form-check-label" for="allowCode">Suche per Code erlauben (bei Private)</label>
-        </div>
-
-        <div class="form-check mb-1">
-          <input id="feedOptIn" class="form-check-input" type="checkbox" bind:checked={feedOptIn} />
-          <label class="form-check-label" for="feedOptIn">Feed Opt-in</label>
-        </div>
-        <div class="text-muted small mb-3">Wenn aktiviert, kÃ¶nnen Workouts (gemÃ¤ÃŸ Sichtbarkeit) im Feed erscheinen.</div>
-
-        <div class="d-flex gap-2 mt-3">
+        <div class="d-flex gap-2 flex-wrap mt-4">
           <button class="btn btn-primary" type="button" onclick={saveProfile} disabled={loading}>
             Profil speichern
           </button>
           <button class="btn btn-outline-danger" type="button" onclick={deleteAccount} disabled={loading}>
-            Account loeschen
+            Account löschen
           </button>
         </div>
 
-        <div class="alert alert-info mt-4">
+        <div class="success-banner mt-3">
           Für ein vollständig ausgefülltes Profil erhältst du einmalig 30 XP.
           {#if profileBonusApplied}
             <div class="mt-2"><strong>Bonus wurde bereits gutgeschrieben.</strong></div>
           {/if}
         </div>
-
-        <div class="text-muted">
-          <strong>Dein Fortschritt:</strong> Level {level} / XP {lifetimeXp} / Trainings {trainingsCount}
-        </div>
       </div>
     </div>
 
-    <div class="card mt-3">
-      <div class="card-body">
+    <div class="card shadow-soft mb-4">
+      <div class="card-body p-4">
         <div class="d-flex justify-content-between align-items-center mb-3">
           <div>
             <h5 class="mb-1">Achievements</h5>
@@ -605,43 +657,41 @@
         </div>
 
         {#if achievementsError}
-          <div class="alert alert-danger">{achievementsError}</div>
+          <div class="error-banner mb-3">{achievementsError}</div>
         {/if}
         {#if achievementsLoading && achievements.length === 0}
           <div class="text-muted">Achievements werden geladen...</div>
         {:else if achievements.length === 0}
-          <div class="alert alert-info">Noch keine Achievements vorhanden.</div>
+          <div class="empty-state">Noch keine Achievements vorhanden.</div>
         {:else}
-          <div class="row row-cols-2 row-cols-md-3 g-3">
-            {#each achievements as ach (ach.key)}
-              <div class="col">
-                <div class={"border rounded p-2 h-100 " + (ach.unlockedAt ? "bg-light" : "bg-body")}>
-                  <div class="d-flex gap-2 align-items-center">
-                    <img src={achievementIcon(ach.key)} alt={ach.name} width="40" height="40" class="flex-shrink-0 rounded" />
-                    <div class="w-100">
-                      <div class="fw-semibold">{ach.name}</div>
-                      <div class="text-muted small text-uppercase">{ach.category}</div>
-                      {#if ach.unlockedAt}
-                        <div class="text-success small">Unlocked: {new Date(ach.unlockedAt).toLocaleDateString()}</div>
-                      {:else}
-                        <div class="text-muted small">Locked</div>
-                      {/if}
-                      <details class="small mt-1">
-                        <summary class="text-primary">Was tun?</summary>
-                        <div class="text-muted">{ach.description || "Schalte dieses Achievement durch Fortschritt frei."}</div>
-                      </details>
+              <div class="card-grid">
+                {#each achievements as ach (ach.key)}
+                  <div class="rounded-12 border p-3 h-100" style={`background:${ach.unlockedAt ? 'var(--surface-alt)' : 'var(--surface)'}`}>
+                    <div class="d-flex gap-3 align-items-center">
+                      <img src={achievementIcon(ach.key)} alt={ach.name} width="44" height="44" class="flex-shrink-0 rounded" />
+                      <div class="w-100">
+                        <div class="fw-semibold">{ach.name}</div>
+                        <div class="text-muted small text-uppercase">{ach.category}</div>
+                        {#if ach.unlockedAt}
+                          <div class="text-success small">Freigeschaltet: {new Date(ach.unlockedAt).toLocaleDateString()}</div>
+                        {:else}
+                          <div class="text-muted small">Gesperrt</div>
+                        {/if}
+                        <details class="small mt-1">
+                          <summary class="text-primary">Was tun?</summary>
+                          <div class="text-muted">{ach.description || "Schalte dieses Achievement durch Fortschritt frei."}</div>
+                        </details>
+                      </div>
                     </div>
                   </div>
-                </div>
+                {/each}
               </div>
-            {/each}
+            {/if}
           </div>
-        {/if}
-      </div>
-    </div>
+        </div>
 
-    <div class="card mt-3">
-      <div class="card-body">
+    <div class="card shadow-soft">
+      <div class="card-body p-4">
         <div class="d-flex justify-content-between align-items-center mb-3">
           <div>
             <h5 class="mb-1">Notifications</h5>
@@ -652,16 +702,16 @@
           </button>
         </div>
         {#if notificationsError}
-          <div class="alert alert-danger">{notificationsError}</div>
+          <div class="error-banner mb-3">{notificationsError}</div>
         {/if}
         {#if notificationsLoading && notifications.length === 0}
           <div class="text-muted">Notifications werden geladen...</div>
         {:else if notifications.length === 0}
-          <div class="alert alert-info">Keine Notifications.</div>
+          <div class="empty-state">Keine Notifications.</div>
         {:else}
           <div class="list-group">
             {#each notifications as n (n._id)}
-              <div class={"list-group-item d-flex justify-content-between align-items-start " + (n.read ? "" : "bg-light")}>
+              <div class={"list-group-item d-flex justify-content-between align-items-start gap-3 " + (n.read ? "" : "bg-light")}>
                 <div>
                   <div class="fw-semibold">{notificationTitle(n)}</div>
                   <div class="text-muted small">{notificationBody(n)}</div>
@@ -680,18 +730,3 @@
     </div>
   {/if}
 </div>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

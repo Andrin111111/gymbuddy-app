@@ -19,7 +19,6 @@ const profileSchema = z.object({
   preferredTimes: z.string().max(200).trim().optional(),
   contact: z.string().max(200).trim().optional(),
   visibility: z.enum(["public", "friends", "private"]).optional(),
-  feedOptIn: z.boolean().optional(),
   allowCodeLookup: z.boolean().optional(),
   postalCode: z.string().max(12).trim().optional(),
   city: z.string().max(50).trim().optional(),
@@ -44,7 +43,6 @@ function pickProfileFromUser(u) {
     preferredTimes: String(p.preferredTimes ?? u?.preferredTimes ?? p.trainingTimes ?? u?.trainingTimes ?? "").trim(),
     contact: String(p.contact ?? u?.contact ?? "").trim(),
     visibility: p.visibility || u?.visibility || "friends",
-    feedOptIn: p.feedOptIn === true || u?.feedOptIn === true,
     allowCodeLookup: p.allowCodeLookup !== false && u?.allowCodeLookup !== false,
     postalCode: String(p.postalCode ?? "").trim(),
     city: String(p.city ?? "").trim(),
@@ -125,7 +123,6 @@ export async function PUT({ locals, request }) {
     preferredTimes: String(updates?.preferredTimes ?? updates?.trainingTimes ?? "").trim(),
     contact: String(updates?.contact ?? "").trim(),
     visibility: updates?.visibility || "friends",
-    feedOptIn: updates?.feedOptIn === true,
     allowCodeLookup: updates?.allowCodeLookup !== false,
     postalCode: String(updates?.postalCode ?? "").trim(),
     city: String(updates?.city ?? "").trim(),
@@ -171,24 +168,32 @@ export async function PUT({ locals, request }) {
     const anyAddressFilled = addressKeys.some((key) => profileDoc[key]);
     if (anyAddressFilled) {
       const allowed = checkGeocodeRateLimit(locals.userId);
+      
       if (!allowed) {
-        return json({ error: "geocoding rate limit exceeded" }, { status: 429 });
-      }
-      const result = await geocodeAddress(profileDoc);
-      const geoPoint = result.ok ? normalizeGeoFromGeocode(result, result.precision || "approx") : null;
-      if (result.ok && geoPoint) {
-        await ensureGeoIndex(db);
-        geoOps.$set = {
-          geo: geoPoint,
-          geoUpdatedAt: now,
-          geoSource: "geocoded",
-          geoPrecision: result.precision || "approx"
-        };
-        geoMessage = "Standort aktualisiert";
+        // Soft fail: Wir speichern das Profil, aber warnen den User
+        geoMessage = "Profil gespeichert, aber Standort-Limit erreicht (versuche es später erneut).";
       } else {
-        geoOps.$unset = { geo: "", geoSource: "", geoPrecision: "" };
-        geoOps.$set = { ...(geoOps.$set || {}), geoUpdatedAt: null };
-        geoMessage = "Adresse gespeichert, Standort nicht gefunden";
+        try {
+          const result = await geocodeAddress(profileDoc);
+          const geoPoint = result.ok ? normalizeGeoFromGeocode(result, result.precision || "approx") : null;
+          if (result.ok && geoPoint) {
+            await ensureGeoIndex(db);
+            geoOps.$set = {
+              geo: geoPoint,
+              geoUpdatedAt: now,
+              geoSource: "geocoded",
+              geoPrecision: result.precision || "approx"
+            };
+            geoMessage = "Standort aktualisiert";
+          } else {
+            geoOps.$unset = { geo: "", geoSource: "", geoPrecision: "" };
+            geoOps.$set = { ...(geoOps.$set || {}), geoUpdatedAt: null };
+            geoMessage = "Adresse gespeichert, Standort nicht gefunden";
+          }
+        } catch (err) {
+          console.error("Geocoding error:", err);
+          geoMessage = "Profil gespeichert, aber Geocoding-Dienst nicht erreichbar.";
+        }
       }
     } else {
       geoOps.$unset = { geo: "", geoUpdatedAt: "", geoSource: "", geoPrecision: "" };
@@ -208,7 +213,6 @@ export async function PUT({ locals, request }) {
         contact: profileDoc.contact,
         profile: profileDoc,
         visibility: profileDoc.visibility,
-        feedOptIn: profileDoc.feedOptIn,
         allowCodeLookup: profileDoc.allowCodeLookup,
         updatedAt: now,
         ...(geoOps.$set || {})

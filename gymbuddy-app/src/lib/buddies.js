@@ -1,29 +1,44 @@
-// src/lib/buddies.js
-export const staticBuddies = [
+// Static buddy lookup used by the buddies/[id] route
+const BUDDIES = [
   {
-    id: "demo1",
-    name: "Lena",
-    gym: "Activ Fitness Winterthur",
-    level: "intermediate",
-    goals: "Powerlifting",
-    trainingTimes: "Mo, Mi, Fr ab 18:00",
-    contact: "@lena-lifts",
-    code: "111111",
-    distanceKm: 2
+    id: "buddy-1",
+    name: "Alex Müller",
+    gym: "Basefit Zürich",
+    level: "Intermediate",
+    focus: "Hypertrophie & Kraft",
+    trainingTimes: "Abends, Wochenende",
+    contact: "@alexmueller",
+    code: "GB-AX1",
+    xp: 1240
   },
   {
-    id: "demo2",
-    name: "Markus",
-    gym: "Fitnesspark Zürich",
-    level: "beginner",
-    goals: "Muskelaufbau",
-    trainingTimes: "Di, Do 19:00",
-    contact: "@markus-gym",
-    code: "222222",
-    distanceKm: 15
+    id: "buddy-2",
+    name: "Sara Baumann",
+    gym: "John Reed Basel",
+    level: "Advanced",
+    focus: "Powerlifting",
+    trainingTimes: "Morgen, Mittag",
+    contact: "@saralifts",
+    code: "GB-SB2",
+    xp: 1980
+  },
+  {
+    id: "buddy-3",
+    name: "Luca Steiner",
+    gym: "Anytime Fitness Bern",
+    level: "Beginner",
+    focus: "Ausdauer & Mobility",
+    trainingTimes: "Flexibel",
+    contact: "luca@example.com",
+    code: "GB-LS3",
+    xp: 620
   }
 ];
 
 export function getBuddyById(id) {
-  return staticBuddies.find((buddy) => buddy.id === id) ?? null;
+  return BUDDIES.find((b) => b.id === id) || null;
+}
+
+export function listBuddies() {
+  return BUDDIES;
 }

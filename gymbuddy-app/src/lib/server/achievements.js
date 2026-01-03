@@ -163,13 +163,3 @@ export async function unlockSeasonRanksForUsers(users = []) {
   }
   await Promise.all(ops);
 }
-
-export async function unlockRankMilestones(userId, lifetimeXp) {
-  const rank = getRankFromXp(lifetimeXp);
-  const unlocks = [];
-  if (rank.stars >= 1) {
-    // no separate achievement keys defined; placeholder for future
-  }
-  if (unlocks.length) await unlockKeys(userId, unlocks);
-  return rank;
-}
