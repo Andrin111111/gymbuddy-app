@@ -1,8 +1,8 @@
 <script>
   import { onMount } from "svelte";
   import { readSession, subscribeSession } from "$lib/session.js";
-  @type {import('./$types').PageData} 
 
+  /** @type {import('./$types').PageData} */
   let { data } = $props();
 
   let session = $state(readSession());
