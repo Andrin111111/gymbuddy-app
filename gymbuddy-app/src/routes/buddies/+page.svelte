@@ -2,7 +2,6 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { readSession, subscribeSession, csrfHeader } from "$lib/session.js";
-  import { listBuddies } from "$lib/buddies.js";
 
   let session = $state(readSession());
   let sessionReady = $state(false);
@@ -32,21 +31,6 @@
   let maxDistanceKm = $state("");
   let distanceInfo = $state(null);
 
-  const demoBuddies = $state(
-    listBuddies().map((b) => ({
-      _id: b.id,
-      name: b.name,
-      gym: b.gym,
-      trainingLevel: b.level,
-      buddyCode: b.code,
-      visibility: "public",
-      city: "",
-      postalCode: "",
-      computedDistanceKm: null,
-      relationship: "none"
-    }))
-  );
-
   async function loadSearch() {
     if (!session?.userId) return;
     hasSearched = true;
@@ -55,23 +39,25 @@
     try {
       const params = new URLSearchParams();
       if (q.trim()) params.set("q", q.trim());
-      if (buddyCodeFilter.trim()) params.set("buddyCode", buddyCodeFilter.trim());
+      const code = buddyCodeFilter.trim();
+      if (code) {
+        params.set("buddyCode", code);
+        // Fallback: manche Backends erwarten "code" statt "buddyCode"
+        params.set("code", code);
+      }
       if (gymFilter.trim()) params.set("gym", gymFilter.trim());
       if (levelFilter) params.set("level", levelFilter);
       if (maxDistanceKm && Number(maxDistanceKm) > 0) params.set("maxDistanceKm", String(maxDistanceKm));
 
       const res = await fetch(`/api/users/search?${params.toString()}`);
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Suche fehlgeschlagen.");
+      if (!res.ok) throw new Error(data?.error || `Suche fehlgeschlagen (Status ${res.status}).`);
       me = data?.me || null;
       results = Array.isArray(data?.results) ? data.results : [];
       distanceInfo = data?.distanceInfo || null;
-      if (results.length === 0 && !q && !buddyCodeFilter && !gymFilter && !levelFilter && !maxDistanceKm) {
-        results = demoBuddies;
-      }
     } catch (e) {
-      searchError = e?.message || "Suche fehlgeschlagen. Zeige Demo-Buddies.";
-      results = demoBuddies;
+      searchError = e?.message || "Suche fehlgeschlagen.";
+      results = [];
       distanceInfo = null;
     } finally {
       searchLoading = false;
