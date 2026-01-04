@@ -17,6 +17,13 @@
   let blocksError = $state("");
   let hasSearched = $state(false);
 
+  function setError(msg) {
+    const text = msg || "";
+    requestsError = text;
+    friendsError = text;
+    blocksError = text;
+  }
+
   let me = $state(null);
   let results = $state([]);
   let incoming = $state([]);
@@ -180,10 +187,10 @@
         headers: { ...csrfHeader() }
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Anfrage konnte nicht zurueckgezogen werden.");
+      if (!res.ok) throw new Error(data?.error || "Anfrage konnte nicht zurückgezogen werden.");
       await Promise.all([loadRequests(), loadSearch()]);
     } catch (e) {
-      setError(e?.message || "Anfrage konnte nicht zurueckgezogen werden.");
+      setError(e?.message || "Anfrage konnte nicht zurückgezogen werden.");
     } finally {
       reqLoading = false;
     }
@@ -271,7 +278,6 @@
         outgoing = [];
         friends = [];
         blocks = [];
-        error = "";
         hasSearched = false;
       }
     });

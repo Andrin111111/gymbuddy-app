@@ -63,6 +63,30 @@
   };
   const preferredOptions = ["Morgen", "Mittag", "Abend", "Wochenende", "Flexibel"];
 
+  async function parseJsonSafe(res) {
+    try {
+      return await res.json();
+    } catch {
+      try {
+        const txt = await res.text();
+        return { error: txt };
+      } catch {
+        return {};
+      }
+    }
+  }
+
+  async function handleUnauthorized(res) {
+    if (res?.status === 401) {
+      clearSession();
+      await refreshSession();
+      session = readSession();
+      mode = "login";
+      return true;
+    }
+    return false;
+  }
+
   function setError(msg) {
     error = msg || "";
   }
@@ -116,7 +140,8 @@
   async function loadRank() {
     try {
       const res = await fetch("/api/ranks/me");
-      const data = await res.json().catch(() => ({}));
+      if (await handleUnauthorized(res)) return;
+      const data = await parseJsonSafe(res);
       if (!res.ok) return;
       rankInfo = data?.rank
         ? {
@@ -126,6 +151,12 @@
             seasonId: data.seasonId ?? ""
           }
         : null;
+      if (rankInfo) {
+        lifetimeXp = Math.max(lifetimeXp, Number(rankInfo.lifetimeXp ?? 0));
+        seasonXp = Math.max(seasonXp, Number(rankInfo.seasonXp ?? seasonXp));
+        xp = Math.max(xp, Number(rankInfo.lifetimeXp ?? xp));
+        level = Math.max(level, Number(rankInfo.level ?? level ?? 1));
+      }
     } catch {
       rankInfo = null;
     }
@@ -141,7 +172,8 @@
     achievementsLoading = true;
     try {
       const res = await fetch("/api/achievements/me");
-      const data = await res.json().catch(() => ({}));
+      if (await handleUnauthorized(res)) return;
+      const data = await parseJsonSafe(res);
       if (!res.ok) throw new Error(data?.error || "Achievements konnten nicht geladen werden.");
       achievements = Array.isArray(data?.all) ? data.all : [];
     } catch (e) {
@@ -162,7 +194,8 @@
     notificationsLoading = true;
     try {
       const res = await fetch("/api/notifications");
-      const data = await res.json().catch(() => ({}));
+      if (await handleUnauthorized(res)) return;
+      const data = await parseJsonSafe(res);
       if (!res.ok) throw new Error(data?.error || "Notifications konnten nicht geladen werden.");
       notifications = Array.isArray(data?.notifications) ? data.notifications : [];
     } catch (e) {
@@ -187,7 +220,8 @@
     loading = true;
     try {
       const res = await fetch("/api/profile");
-      const data = await res.json();
+      if (await handleUnauthorized(res)) return;
+      const data = await parseJsonSafe(res);
       if (!res.ok) throw new Error(data?.error || "Profil konnte nicht geladen werden.");
 
       const profile = data?.profile ?? data;
@@ -239,7 +273,7 @@
         body: JSON.stringify({ email: email.trim(), password })
       });
 
-      const data = await res.json();
+      const data = await parseJsonSafe(res);
       if (!res.ok) throw new Error(data?.error || "Registrierung fehlgeschlagen.");
 
       const newSession = { userId: data.userId, email: data.email, buddyCode: data.buddyCode };
@@ -268,7 +302,7 @@
         body: JSON.stringify({ email: email.trim(), password })
       });
 
-      const data = await res.json();
+      const data = await parseJsonSafe(res);
       if (!res.ok) throw new Error(data?.error || "Login fehlgeschlagen.");
 
       const newSession = { userId: data.userId, email: data.email, buddyCode: data.buddyCode };
@@ -307,7 +341,8 @@
         })
       });
 
-      const data = await res.json();
+      if (await handleUnauthorized(res)) return;
+      const data = await parseJsonSafe(res);
       if (!res.ok) throw new Error(data?.error || "Profil konnte nicht gespeichert werden.");
 
       const profile = data?.profile ?? data;
@@ -337,7 +372,7 @@
     try {
       const res = await fetch("/api/auth/delete", { method: "POST", headers: { ...csrfHeader() } });
 
-      const data = await res.json();
+      const data = await parseJsonSafe(res);
       if (!res.ok) throw new Error(data?.error || "Account konnte nicht gelöscht werden.");
 
       clearSession();
