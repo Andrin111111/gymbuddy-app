@@ -3,6 +3,7 @@ import { getDb } from "$lib/server/mongo.js";
 import { RANKS } from "$lib/ranks.config.js";
 import { getRankFromXp } from "$lib/server/ranks.js";
 import { ObjectId } from "mongodb";
+import { DEMO_USERS } from "$lib/server/demoUsers.js";
 
 function toObjectIdOrNull(id) {
   try {
@@ -150,9 +151,11 @@ export async function GET({ locals }) {
     if (w.buddyUserId === meIdStr && w.userId) jointSet.add(String(w.userId));
   }
 
+  const demoIds = DEMO_USERS.map((d) => d._id);
+
   const candidates = await users
     .find(
-      { _id: { $ne: meId } },
+      { _id: { $ne: meId, $nin: demoIds } },
       {
         projection: {
           profile: 1,
@@ -172,6 +175,7 @@ export async function GET({ locals }) {
 
   for (const u of candidates) {
     const id = String(u._id);
+    if (demoIds.includes(id)) continue;
     if (blockedSet.has(id)) continue;
     const prof = u.profile ?? {};
     const visibility = prof.visibility || "friends";

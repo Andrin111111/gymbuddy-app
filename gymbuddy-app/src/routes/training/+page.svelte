@@ -207,6 +207,22 @@
     }
   }
 
+  async function loadSummaryFromProfile() {
+    if (!session?.userId) return;
+    try {
+      const res = await fetch("/api/profile");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return;
+      summary = {
+        xp: Number(data?.xp ?? data?.lifetimeXp ?? summary.xp),
+        level: Number(data?.level ?? summary.level),
+        trainingsCount: Number(data?.trainingsCount ?? summary.trainingsCount)
+      };
+    } catch {
+      // ignore
+    }
+  }
+
   async function loadCatalog() {
     if (!session?.userId) return;
     loadingCatalog = true;
@@ -544,6 +560,7 @@
         loadFriends();
         loadBuddySuggestions();
         loadAnalytics();
+        loadSummaryFromProfile();
       } else {
         workouts = [];
         templates = [];
@@ -560,6 +577,7 @@
       loadFriends();
       loadBuddySuggestions();
       loadAnalytics();
+      loadSummaryFromProfile();
     }
 
     return () => unsub();
@@ -706,6 +724,9 @@
               <button class="btn btn-outline-primary btn-sm" type="button" onclick={() => addExercise("workout")}>
                 Übung hinzufügen
               </button>
+            </div>
+            <div class="text-muted small mb-2">
+              Für jede Übung kannst du eigene Sets erfassen. Mehrere Übungen pro Workout sind möglich.
             </div>
 
             <div class="vstack gap-3">
@@ -1100,121 +1121,75 @@
       </div>
     </div>
 
-    <div class="row g-4 mt-0">
-      <div class="col-lg-8">
-        <div class="card shadow-soft">
-          <div class="card-body p-4">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <h5 class="card-title mb-0">Gespeicherte Workouts</h5>
-              <span class="text-muted small">{workouts.length} Einträge</span>
-            </div>
+    <div class="card shadow-soft mt-4">
+      <div class="card-body p-4">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h5 class="card-title mb-0">Gespeicherte Workouts</h5>
+          <span class="text-muted small">{workouts.length} Einträge</span>
+        </div>
 
-            {#if loadingWorkouts}
-              <div class="text-muted">Lade Workouts...</div>
-            {:else if workouts.length === 0}
-              <div class="empty-state">Noch keine Workouts erfasst.</div>
-            {:else}
-              <div class="list-group">
-                {#each workouts as w (w._id)}
-                  <div class="list-group-item">
-                    <div class="d-flex justify-content-between align-items-start gap-2">
-                      <div>
-                        <div class="fw-semibold">{displayDate(w)} - {w.durationMinutes} Min</div>
-                        <div class="text-muted small">
-                          {w.exercises?.length || 0} Übungen
-                          {#if w.buddyName}
-                            - Buddy: {w.buddyName}
-                          {/if}
-                        </div>
-                      </div>
-                      <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-secondary" type="button" onclick={() => startEditWorkout(w)}>
-                          Bearbeiten
-                        </button>
-                        <button class="btn btn-outline-danger" type="button" onclick={() => deleteWorkout(w._id)}>
-                          Löschen
-                        </button>
-                        <button
-                          class="btn btn-outline-primary"
-                          type="button"
-                          onclick={() => (expandedWorkoutId = expandedWorkoutId === w._id ? "" : w._id)}
-                        >
-                          Details
-                        </button>
-                      </div>
+        {#if loadingWorkouts}
+          <div class="text-muted">Lade Workouts...</div>
+        {:else if workouts.length === 0}
+          <div class="empty-state">Noch keine Workouts erfasst.</div>
+        {:else}
+          <div class="list-group">
+            {#each workouts as w (w._id)}
+              <div class="list-group-item">
+                <div class="d-flex justify-content-between align-items-start gap-2">
+                  <div>
+                    <div class="fw-semibold">{displayDate(w)} - {w.durationMinutes} Min</div>
+                    <div class="text-muted small">
+                      {w.exercises?.length || 0} Übungen
+                      {#if w.buddyName}
+                        - Buddy: {w.buddyName}
+                      {/if}
                     </div>
+                  </div>
+                  <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" type="button" onclick={() => startEditWorkout(w)}>
+                      Bearbeiten
+                    </button>
+                    <button class="btn btn-outline-danger" type="button" onclick={() => deleteWorkout(w._id)}>
+                      Löschen
+                    </button>
+                    <button
+                      class="btn btn-outline-primary"
+                      type="button"
+                      onclick={() => (expandedWorkoutId = expandedWorkoutId === w._id ? "" : w._id)}
+                    >
+                      Details
+                    </button>
+                  </div>
+                </div>
 
-                    {#if expandedWorkoutId === w._id}
-                      <div class="mt-3">
-                        {#if w.notes}
-                          <div class="mb-2"><strong>Notizen:</strong> {w.notes}</div>
-                        {/if}
-                        <div class="vstack gap-2">
-                          {#each w.exercises as ex}
-                            <div class="border rounded p-2">
-                              <div class="fw-semibold">{ex.name || ex.exerciseKey}</div>
-                              <div class="text-muted small">
-                                {#each ex.sets as s, idx}
-                                  <div>
-                                    Set {idx + 1}: {s.reps} Reps - {s.weight} kg
-                                    {#if s.rpe} - RPE {s.rpe}{/if}
-                                    {#if s.isWarmup} - Warm-up{/if}
-                                  </div>
-                                {/each}
-                              </div>
-                            </div>
-                          {/each}
-                        </div>
-                      </div>
+                {#if expandedWorkoutId === w._id}
+                  <div class="mt-3">
+                    {#if w.notes}
+                      <div class="mb-2"><strong>Notizen:</strong> {w.notes}</div>
                     {/if}
-                  </div>
-                {/each}
-              </div>
-            {/if}
-          </div>
-        </div>
-      </div>
-
-      <div class="col-lg-4">
-        <div class="card shadow-soft d-none" aria-hidden="true">
-          <div class="card-body p-4">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <h5 class="card-title mb-0">Vorlagen</h5>
-              <span class="text-muted small">{templates.length} gespeichert</span>
-            </div>
-            {#if loadingTemplates}
-              <div class="text-muted">Lade Vorlagen...</div>
-            {:else if templates.length === 0}
-              <div class="empty-state">Noch keine Vorlagen.</div>
-            {:else}
-              <div class="list-group">
-                {#each templates as t (t._id)}
-                  <div class="list-group-item">
-                    <div class="d-flex justify-content-between align-items-start gap-2">
-                      <div>
-                        <div class="fw-semibold">{t.name}</div>
-                        <div class="text-muted small">
-                          {t.exercises?.length || 0} Übungen - {t.durationMinutes} Min
+                    <div class="vstack gap-2">
+                      {#each w.exercises as ex}
+                        <div class="border rounded p-2">
+                          <div class="fw-semibold">{ex.name || ex.exerciseKey}</div>
+                          <div class="text-muted small">
+                            {#each ex.sets as s, idx}
+                              <div>
+                                Set {idx + 1}: {s.reps} Reps - {s.weight} kg
+                                {#if s.rpe} - RPE {s.rpe}{/if}
+                                {#if s.isWarmup} - Warm-up{/if}
+                              </div>
+                            {/each}
+                          </div>
                         </div>
-                      </div>
-                      <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-primary" type="button" onclick={() => useTemplate(t)}>
-                          Verwenden
-                        </button>
-                        <button class="btn btn-outline-secondary" type="button" onclick={() => startEditTemplate(t)}>
-                          Bearbeiten
-                        </button>
-                        <button class="btn btn-outline-danger" type="button" onclick={() => deleteTemplate(t._id)}>
-                          Löschen
-                        </button>
-                      </div>
+                      {/each}
                     </div>
                   </div>
-                {/each}
+                {/if}
               </div>
-            {/if}
+            {/each}
           </div>
-        </div>
+        {/if}
       </div>
     </div>
   {/if}

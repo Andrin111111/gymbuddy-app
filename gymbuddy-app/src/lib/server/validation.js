@@ -2,7 +2,8 @@
 
 export function hasDangerousKeyChars(str) {
   if (typeof str !== "string") return false;
-  return str.includes("$") || str.includes(".");
+  // $ in Feldwerten kann zu Mongo-Schlüssel-Injektion führen; Punkte in Werten erlauben wir (z.B. E-Mails).
+  return str.includes("$");
 }
 
 export function assertSafeStrings(fields = []) {

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { ObjectId } from "mongodb";
 import { getDb } from "$lib/server/mongo.js";
 import { assertSafeStrings } from "$lib/server/validation.js";
-import { DEMO_USERS, ensureDemoUsers } from "$lib/server/demoUsers.js";
+import { DEMO_USERS } from "$lib/server/demoUsers.js";
 
 const sendSchema = z.object({
   toUserId: z.string().trim().min(1)
@@ -30,16 +30,19 @@ export async function GET({ locals }) {
   const col = db.collection("friendRequests");
   const users = db.collection("users");
   await ensureIndexes(db);
-  await ensureDemoUsers(db);
 
-  const incoming = await col
-    .find({ toUserId: userId, status: "pending" })
-    .sort({ createdAt: -1 })
-    .toArray();
-  const outgoing = await col
-    .find({ fromUserId: userId, status: "pending" })
-    .sort({ createdAt: -1 })
-    .toArray();
+  const incoming = (
+    await col
+      .find({ toUserId: userId, status: "pending" })
+      .sort({ createdAt: -1 })
+      .toArray()
+  ).filter((r) => !DEMO_USERS.find((d) => d._id === r.fromUserId));
+  const outgoing = (
+    await col
+      .find({ fromUserId: userId, status: "pending" })
+      .sort({ createdAt: -1 })
+      .toArray()
+  ).filter((r) => !DEMO_USERS.find((d) => d._id === r.toUserId));
 
   const userIds = [
     ...incoming.map((r) => r.fromUserId),
@@ -110,6 +113,10 @@ export async function POST({ locals, request }) {
   const blocks = db.collection("blocks");
   await ensureIndexes(db);
   await ensureDemoUsers(db);
+
+  if (DEMO_USERS.find((d) => d._id === toUserId)) {
+    return json({ error: "target not found" }, { status: 404 });
+  }
 
   const toUser = await users.findOne(
     { _id: toObjectIdOrNull(toUserId) ?? toUserId },

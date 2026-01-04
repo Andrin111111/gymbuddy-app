@@ -4,7 +4,7 @@ import { getDb } from "$lib/server/mongo.js";
 import { assertSafeStrings } from "$lib/server/validation.js";
 import { ObjectId } from "mongodb";
 import { computeDistanceKm } from "$lib/server/geo.js";
-import { DEMO_USERS, ensureDemoUsers } from "$lib/server/demoUsers.js";
+import { DEMO_USERS } from "$lib/server/demoUsers.js";
 
 const querySchema = z.object({
   q: z.string().trim().max(120).optional(),
@@ -69,8 +69,6 @@ export async function GET({ locals, url }) {
   const usersCol = db.collection("users");
   const friendReqCol = db.collection("friendRequests");
   const blocksCol = db.collection("blocks");
-  // ensure demo users exist for quick testing / auto-accept
-  await ensureDemoUsers(db);
 
   const meIdStr = String(locals.userId);
   const meId = toObjectIdOrNull(meIdStr) ?? meIdStr;
@@ -90,7 +88,8 @@ export async function GET({ locals, url }) {
     ...blockedBy.map((b) => String(b.userId))
   ]);
 
-  const query = { _id: { $ne: meId } };
+  const demoIds = DEMO_USERS.map((u) => u._id);
+  const query = { _id: { $ne: meId, $nin: demoIds } };
   if (gym) {
     query["profile.gym"] = { $regex: gym, $options: "i" };
   }
@@ -132,6 +131,7 @@ export async function GET({ locals, url }) {
 
   const applyDistance = Boolean(maxDistanceKm && me.geo?.coordinates);
   const results = raw
+    .filter((u) => !demoIds.includes(String(u._id)))
     .filter((u) => {
       const prof = sanitizeProfile(u);
       const isBlocked = blockedIds.has(String(u._id));

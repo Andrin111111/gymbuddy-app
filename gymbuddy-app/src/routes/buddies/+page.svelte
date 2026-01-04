@@ -67,6 +67,7 @@
   async function loadRequests() {
     if (!session?.userId) return;
     reqLoading = true;
+    requestsError = "";
     try {
       const res = await fetch("/api/friendRequests");
       const data = await res.json().catch(() => ({}));

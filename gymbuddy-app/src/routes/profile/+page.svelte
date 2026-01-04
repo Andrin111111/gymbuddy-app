@@ -288,10 +288,7 @@
     setError("");
     loading = true;
     try {
-      const safeContact = (contact || "").trim().replace(/[^a-zA-Z0-9@.+\-_\s]/g, "");
-      if (safeContact.length && safeContact !== contact) {
-        contact = safeContact;
-      }
+      const safeContact = (contact || "").trim();
       const res = await fetch("/api/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...csrfHeader() },
@@ -623,10 +620,13 @@
               <option value="friends">Nur Freunde</option>
               <option value="private">Privat</option>
             </select>
+            <div class="text-muted small mt-1">
+              Gilt fürs gesamte Profil. Buddy-Code-Suche funktioniert immer, auch bei privater Sichtbarkeit.
+            </div>
           </div>
 
           <div class="col-md-6 d-flex align-items-end">
-            <div class="text-muted small">Codesuche ist fÇ¬r alle Profile erlaubt.</div>
+            <div class="text-muted small">Codesuche ist für alle Profile erlaubt.</div>
           </div>
         </div>
 
