@@ -288,6 +288,10 @@
     setError("");
     loading = true;
     try {
+      const safeContact = (contact || "").trim().replace(/[^a-zA-Z0-9@.+\-_\s]/g, "");
+      if (safeContact.length && safeContact !== contact) {
+        contact = safeContact;
+      }
       const res = await fetch("/api/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...csrfHeader() },
@@ -297,7 +301,7 @@
           trainingLevel,
           goals,
           preferredTimes,
-          contact,
+          contact: safeContact,
           visibility,
           allowCodeLookup: true,
           postalCode,
