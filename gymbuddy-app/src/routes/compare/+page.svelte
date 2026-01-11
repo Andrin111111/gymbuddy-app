@@ -91,12 +91,17 @@
   {#if !sessionReady}
     <div class="alert alert-info">Lade Session...</div>
   {:else if !isAuthenticated}
-    <div class="alert alert-warning mb-3">
-      Bitte melde dich an, um das Friends Leaderboard zu sehen.
+    <div class="card shadow-soft">
+      <div class="card-body p-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div>
+          <h5 class="mb-1">Bitte anmelden</h5>
+          <p class="text-muted mb-0">Melde dich an, um das Friends Leaderboard zu sehen.</p>
+        </div>
+        <button class="btn btn-primary" type="button" onclick={() => goto("/profile")}>
+          Zur Anmeldung
+        </button>
+      </div>
     </div>
-    <button class="btn btn-primary" type="button" onclick={() => goto("/profile")}>
-      Zur Anmeldung
-    </button>
   {:else}
     {#if error}
       <div class="alert alert-danger">{error}</div>

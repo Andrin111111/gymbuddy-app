@@ -3,7 +3,7 @@ import { z } from "zod";
 import { ObjectId } from "mongodb";
 import { getDb } from "$lib/server/mongo.js";
 import { assertSafeStrings } from "$lib/server/validation.js";
-import { DEMO_USERS } from "$lib/server/demoUsers.js";
+import { DEMO_USERS, ensureDemoUsers } from "$lib/server/demoUsers.js";
 
 const sendSchema = z.object({
   toUserId: z.string().trim().min(1)

@@ -35,8 +35,6 @@
   let buddyCodeFilter = $state("");
   let gymFilter = $state("");
   let levelFilter = $state("");
-  let maxDistanceKm = $state("");
-  let distanceInfo = $state(null);
 
   async function loadSearch() {
     if (!session?.userId) return;
@@ -54,18 +52,15 @@
       }
       if (gymFilter.trim()) params.set("gym", gymFilter.trim());
       if (levelFilter) params.set("level", levelFilter);
-      if (maxDistanceKm && Number(maxDistanceKm) > 0) params.set("maxDistanceKm", String(maxDistanceKm));
 
       const res = await fetch(`/api/users/search?${params.toString()}`);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || `Suche fehlgeschlagen (Status ${res.status}).`);
       me = data?.me || null;
       results = Array.isArray(data?.results) ? data.results : [];
-      distanceInfo = data?.distanceInfo || null;
     } catch (e) {
       searchError = e?.message || "Suche fehlgeschlagen.";
       results = [];
-      distanceInfo = null;
     } finally {
       searchLoading = false;
     }
@@ -298,15 +293,24 @@
   {#if !sessionReady}
     <div class="alert alert-info">Lade Session...</div>
   {:else if !isAuthenticated}
-    <div class="alert alert-warning mb-3">Bitte melde dich an, um Gymbuddies zu verwalten.</div>
-    <button class="btn btn-primary" type="button" onclick={() => goto("/profile")}>Zur Anmeldung</button>
+    <div class="card shadow-soft">
+      <div class="card-body p-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div>
+          <h5 class="mb-1">Bitte anmelden</h5>
+          <p class="text-muted mb-0">Melde dich an, um Gymbuddies zu verwalten.</p>
+        </div>
+        <button class="btn btn-primary" type="button" onclick={() => goto("/profile")}>
+          Zur Anmeldung
+        </button>
+      </div>
+    </div>
   {:else}
     <div class="card shadow-soft mb-3">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
           <div>
             <div class="section-title mb-1">Suche</div>
-            <div class="muted-subtitle">Filtere nach Name, Gym, Level oder Distanz.</div>
+            <div class="muted-subtitle">Filtere nach Name, Gym oder Trainingslevel.</div>
           </div>
           <button class="btn btn-outline-primary btn-sm" type="button" onclick={loadSearch} disabled={searchLoading}>
             Suchen
@@ -329,31 +333,13 @@
             <input id="gym" class="form-control" placeholder="z.B. Activ" bind:value={gymFilter} />
           </div>
           <div class="col-md-6">
-            <label class="form-label" for="level">Level</label>
+            <label class="form-label" for="level">Trainingslevel</label>
             <select id="level" class="form-select" bind:value={levelFilter}>
               <option value="">Alle</option>
               <option value="beginner">Beginner</option>
               <option value="intermediate">Intermediate</option>
               <option value="advanced">Advanced</option>
             </select>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label" for="distance">Maximale Distanz (km)</label>
-            <input
-              id="distance"
-              class="form-control"
-              type="number"
-              min="1"
-              max="500"
-              placeholder="z.B. 10"
-              bind:value={maxDistanceKm}
-            />
-            <div class="form-text">
-              Distanzfilter funktioniert nur, wenn du deine Adresse im Profil hinterlegt hast.
-            </div>
-            {#if distanceInfo?.ignoredReason === "missing-geo" && maxDistanceKm}
-              <div class="text-warning small mt-1">Adresse fehlt – Distanzfilter wurde ignoriert.</div>
-            {/if}
           </div>
         </div>
       </div>
@@ -374,17 +360,9 @@
               <div class="list-group-item d-flex justify-content-between align-items-start gap-3">
                 <div class="flex-grow-1">
                   <div class="fw-semibold">{u.name || "Unbekannt"}</div>
-                  <div class="text-muted small">Gym: {u.gym || "n/a"} | Level: {u.trainingLevel || "n/a"}</div>
+                  <div class="text-muted small">Gym: {u.gym || "n/a"} | Trainingslevel: {u.trainingLevel || "n/a"}</div>
                   <div class="text-muted small">
                     ID: {u.buddyCode || "n/a"} | Sichtbarkeit: {u.visibility}
-                    {#if u.city || u.postalCode}
-                      | {u.postalCode} {u.city}
-                    {/if}
-                    {#if typeof u.computedDistanceKm === "number"}
-                      | Distanz: {u.computedDistanceKm} km
-                    {:else}
-                      | Distanz: unbekannt
-                    {/if}
                   </div>
                 </div>
                 <div class="d-flex flex-column gap-2">

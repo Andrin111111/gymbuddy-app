@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { readSession, subscribeSession, csrfHeader } from "$lib/session.js";
+  import { rankNameFromXp } from "$lib/rank-utils.js";
 
   const LOCATION_OPTIONS = [
     { value: "gym", label: "Gym" },
@@ -72,11 +73,9 @@
   let templates = $state([]);
   let exercisesCatalog = $state({ all: [], builtIn: [], custom: [] });
   let friends = $state([]);
-  let buddySuggestions = $state([]);
-  let suggestionsLoading = $state(false);
-  let suggestionsError = $state("");
   let summary = $state({ xp: 0, level: 1, trainingsCount: 0 });
   let analytics = $state({ workoutsThisWeek: 0, totalVolumeThisWeek: 0, bestLifts: [] });
+  let rankLabel = $derived(rankNameFromXp(summary.xp));
 
   let workoutForm = $state(createWorkoutForm());
   let templateForm = $state(createTemplateForm());
@@ -316,22 +315,6 @@
     }
   }
 
-  async function loadBuddySuggestions() {
-    if (!session?.userId) return;
-    suggestionsLoading = true;
-    suggestionsError = "";
-    try {
-      const res = await fetch("/api/buddies/suggestions");
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Vorschläge konnten nicht geladen werden.");
-      buddySuggestions = Array.isArray(data?.suggestions) ? data.suggestions : [];
-    } catch (e) {
-      suggestionsError = e?.message || "Vorschläge konnten nicht geladen werden.";
-      buddySuggestions = [];
-    } finally {
-      suggestionsLoading = false;
-    }
-  }
 
   function buildWorkoutPayload() {
     return {
@@ -551,6 +534,20 @@
     return local || "Datum fehlt";
   }
 
+  function exerciseLabel(key) {
+    const id = String(key ?? "").trim();
+    if (!id) return "Uebung";
+    const match = exercisesCatalog.all.find((opt) => opt.key === id);
+    if (match?.name) return match.name;
+    const cleaned = id.replace(/^cust-/, "").replace(/[_-]+/g, " ").trim();
+    if (!cleaned) return id;
+    return cleaned
+      .split(" ")
+      .filter(Boolean)
+      .map((word) => word[0].toUpperCase() + word.slice(1))
+      .join(" ");
+  }
+
   onMount(() => {
     const unsub = subscribeSession((s) => {
       session = s;
@@ -558,14 +555,12 @@
         loadCatalog();
         loadWorkouts();
         loadFriends();
-        loadBuddySuggestions();
         loadAnalytics();
         loadSummaryFromProfile();
       } else {
         workouts = [];
         templates = [];
         friends = [];
-        buddySuggestions = [];
         summary = { xp: 0, level: 1, trainingsCount: 0 };
         analytics = { workoutsThisWeek: 0, totalVolumeThisWeek: 0, bestLifts: [] };
       }
@@ -575,7 +570,6 @@
       loadCatalog();
       loadWorkouts();
       loadFriends();
-      loadBuddySuggestions();
       loadAnalytics();
       loadSummaryFromProfile();
     }
@@ -591,7 +585,7 @@
     </div>
     {#if isAuthenticated}
       <div class="pill">
-        <span>Level {summary.level}</span>
+        <span>Rank {rankLabel}</span>
         <span class="badge text-bg-light">XP {summary.xp}</span>
         <span class="badge text-bg-light">Trainings {summary.trainingsCount}</span>
       </div>
@@ -602,7 +596,7 @@
     <div class="card shadow-soft">
       <div class="card-body p-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
         <div>
-          <h5 class="mb-1">Bitte einloggen</h5>
+          <h5 class="mb-1">Bitte anmelden</h5>
           <p class="text-muted mb-0">Melde dich an, um Workouts zu erfassen und Vorlagen zu nutzen.</p>
         </div>
         <button class="btn btn-primary" type="button" onclick={() => goto("/profile")}>
@@ -685,25 +679,12 @@
                       {/each}
                     </optgroup>
                   {/if}
-                  {#if buddySuggestions.length > 0}
-                    <optgroup label="Vorschläge">
-                      {#each buddySuggestions as s (s.userId)}
-                        <option value={s.userId}>{s.name}</option>
-                      {/each}
-                    </optgroup>
-                  {/if}
                 </select>
                 {#if loadingFriends}
                   <div class="text-muted small mt-1">Freunde werden geladen...</div>
                 {/if}
-                {#if suggestionsLoading}
-                  <div class="text-muted small mt-1">Buddy Vorschläge werden geladen...</div>
-                {/if}
-                {#if !loadingFriends && !suggestionsLoading && friends.length === 0 && buddySuggestions.length === 0}
+                {#if !loadingFriends && friends.length === 0}
                   <div class="text-muted small mt-1">Noch keine Buddies verfügbar.</div>
-                {/if}
-                {#if suggestionsError}
-                  <div class="text-danger small mt-1">{suggestionsError}</div>
                 {/if}
               </div>
               <div class="col-12">
@@ -860,8 +841,8 @@
             <h5 class="card-title mb-3">Dein Fortschritt</h5>
             <div class="stat-grid mb-2">
               <div class="stat-tile">
-                <div class="label">Level</div>
-                <div class="value">{summary.level}</div>
+                <div class="label">Rank</div>
+                <div class="value">{rankLabel}</div>
               </div>
               <div class="stat-tile">
                 <div class="label">XP gesamt</div>
@@ -871,9 +852,6 @@
                 <div class="label">Trainings</div>
                 <div class="value">{summary.trainingsCount}</div>
               </div>
-            </div>
-            <div class="text-muted small">
-              XP-Logik bleibt simpel, detaillierte Ranks &amp; Caps folgen in späteren Paketen.
             </div>
           </div>
         </div>
@@ -901,7 +879,7 @@
               {:else}
                 <ul class="small mb-0">
                   {#each analytics.bestLifts as lift}
-                    <li>{lift.exerciseKey}: {lift.weight} kg</li>
+                    <li>{exerciseLabel(lift.exerciseKey)}: {lift.weight} kg</li>
                   {/each}
                 </ul>
               {/if}

@@ -44,17 +44,22 @@
 <h1>{buddy.name}</h1>
 
 {#if !isAuthenticated}
-  <div class="alert alert-warning mt-3">
-    Bitte melde dich an, um Details von Gymbuddies zu sehen und Verbindungen zu verwalten.
+  <div class="card shadow-soft mt-3">
+    <div class="card-body p-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
+      <div>
+        <h5 class="mb-1">Bitte anmelden</h5>
+        <p class="text-muted mb-0">Melde dich an, um Details von Gymbuddies zu sehen und Verbindungen zu verwalten.</p>
+      </div>
+      <a href="/profile" class="btn btn-primary">Zur Anmeldung</a>
+    </div>
   </div>
-  <a href="/profile" class="btn btn-primary mt-2">Zur Anmeldung</a>
 {:else}
   <div class="card mt-3 shadow-sm">
     <div class="card-body">
       <h5 class="card-title">{buddy.gym}</h5>
 
       <p class="card-text mb-1">
-        <strong>Level:</strong> {buddy.level}
+        <strong>Trainingslevel:</strong> {buddy.level}
       </p>
 
       <p class="card-text mb-1">

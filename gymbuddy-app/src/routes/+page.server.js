@@ -1,5 +1,4 @@
 export async function load({ fetch, locals }) {
-  // 1. Prüfen ob eingeloggt
   if (!locals.userId) {
     return {
       isAuthenticated: false,
@@ -8,7 +7,6 @@ export async function load({ fetch, locals }) {
     };
   }
 
-  // 2. Parallel Daten laden (schneller als nacheinander)
   const [profileRes, suggestionsRes] = await Promise.all([
     fetch("/api/profile"),
     fetch("/api/buddies/suggestions")

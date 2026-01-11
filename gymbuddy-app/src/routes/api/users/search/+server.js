@@ -3,23 +3,13 @@ import { z } from "zod";
 import { getDb } from "$lib/server/mongo.js";
 import { assertSafeStrings } from "$lib/server/validation.js";
 import { ObjectId } from "mongodb";
-import { computeDistanceKm } from "$lib/server/geo.js";
 import { DEMO_USERS } from "$lib/server/demoUsers.js";
 
 const querySchema = z.object({
   q: z.string().trim().max(120).optional(),
   buddyCode: z.string().trim().max(16).optional(),
   gym: z.string().trim().max(120).optional(),
-  level: z.string().trim().max(40).optional(),
-  maxDistanceKm: z
-    .preprocess(
-      (v) => {
-        if (v === null || v === undefined || v === "") return undefined;
-        const num = Number(v);
-        return Number.isFinite(num) ? num : undefined;
-      },
-      z.number().positive().max(500).optional()
-    )
+  level: z.string().trim().max(40).optional()
 });
 
 function toObjectIdOrNull(id) {
@@ -40,9 +30,7 @@ function sanitizeProfile(u) {
     preferredTimes: String(p.preferredTimes ?? u?.preferredTimes ?? p.trainingTimes ?? u?.trainingTimes ?? "").trim(),
     contact: String(p.contact ?? u?.contact ?? "").trim(),
     visibility: p.visibility || "friends",
-    allowCodeLookup: p.allowCodeLookup !== false,
-    city: String(p.city ?? "").trim(),
-    postalCode: String(p.postalCode ?? "").trim()
+    allowCodeLookup: p.allowCodeLookup !== false
   };
 }
 
@@ -53,12 +41,11 @@ export async function GET({ locals, url }) {
     q: url.searchParams.get("q") || undefined,
     buddyCode: url.searchParams.get("buddyCode") || undefined,
     gym: url.searchParams.get("gym") || undefined,
-    level: url.searchParams.get("level") || undefined,
-    maxDistanceKm: url.searchParams.get("maxDistanceKm") || undefined
+    level: url.searchParams.get("level") || undefined
   });
   if (!parsed.success) return json({ error: "invalid query" }, { status: 400 });
 
-  const { q, buddyCode, gym, level, maxDistanceKm } = parsed.data;
+  const { q, buddyCode, gym, level } = parsed.data;
   try {
     assertSafeStrings([q, buddyCode, gym, level].filter(Boolean));
   } catch {
@@ -75,7 +62,7 @@ export async function GET({ locals, url }) {
 
   const me = await usersCol.findOne(
     { _id: meId },
-    { projection: { friends: 1, profile: 1, name: 1, email: 1, buddyCode: 1, geo: 1 } }
+    { projection: { friends: 1, profile: 1, name: 1, email: 1, buddyCode: 1 } }
   );
   if (!me) return json({ error: "user not found" }, { status: 404 });
 
@@ -113,8 +100,7 @@ export async function GET({ locals, url }) {
         name: 1,
         email: 1,
         buddyCode: 1,
-        friends: 1,
-        geo: 1
+        friends: 1
       }
     })
     .limit(50)
@@ -129,7 +115,6 @@ export async function GET({ locals, url }) {
   const outgoing = new Set(pending.filter((p) => p.fromUserId === meIdStr).map((p) => p.toUserId));
   const incoming = new Set(pending.filter((p) => p.toUserId === meIdStr).map((p) => p.fromUserId));
 
-  const applyDistance = Boolean(maxDistanceKm && me.geo?.coordinates);
   const results = raw
     .filter((u) => !demoIds.includes(String(u._id)))
     .filter((u) => {
@@ -156,12 +141,6 @@ export async function GET({ locals, url }) {
         : outgoing.has(id)
         ? "outgoing"
         : "none";
-      const distanceKm =
-        me?.geo && u?.geo ? computeDistanceKm(me.geo, u.geo) : null;
-      if (applyDistance) {
-        if (!u?.geo || distanceKm === null) return null;
-        if (distanceKm > maxDistanceKm) return null;
-      }
       return {
         _id: id,
         name: prof.name || u.email || "Buddy",
@@ -173,9 +152,6 @@ export async function GET({ locals, url }) {
         visibility: prof.visibility,
         allowCodeLookup: prof.allowCodeLookup,
         relationship,
-        city: prof.city || null,
-        postalCode: prof.postalCode || null,
-        computedDistanceKm: distanceKm !== null && Number.isFinite(distanceKm) ? Math.round(distanceKm) : null
       };
     })
     .filter(Boolean);
@@ -185,14 +161,7 @@ export async function GET({ locals, url }) {
       _id: meIdStr,
       buddyCode: me?.buddyCode || "",
       friends: myFriends,
-      profile: sanitizeProfile(me),
-      geo: me?.geo ? { updatedAt: me.geoUpdatedAt ?? null } : null
-    },
-    distanceInfo: {
-      applied: applyDistance,
-      maxDistanceKm: maxDistanceKm || null,
-      hasGeo: Boolean(me?.geo),
-      ignoredReason: !me?.geo && maxDistanceKm ? "missing-geo" : null
+      profile: sanitizeProfile(me)
     },
     results
   });

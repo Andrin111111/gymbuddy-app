@@ -4,12 +4,6 @@ import { z } from "zod";
 import { getDb } from "$lib/server/mongo.js";
 import { isProfileComplete, XP_PROFILE_BONUS, calculateLevel } from "$lib/gamification.js";
 import { assertSafeStrings } from "$lib/server/validation.js";
-import {
-  checkGeocodeRateLimit,
-  ensureGeoIndex,
-  geocodeAddress,
-  normalizeGeoFromGeocode
-} from "$lib/server/geo.js";
 
 const profileSchema = z.object({
   name: z.string().max(120).trim().optional(),
@@ -19,10 +13,7 @@ const profileSchema = z.object({
   preferredTimes: z.string().max(200).trim().optional(),
   contact: z.string().max(200).trim().optional(),
   visibility: z.enum(["public", "friends", "private"]).optional(),
-  allowCodeLookup: z.boolean().optional(),
-  postalCode: z.string().max(12).trim().optional(),
-  city: z.string().max(50).trim().optional(),
-  country: z.string().max(50).trim().optional()
+  allowCodeLookup: z.boolean().optional()
 });
 
 function toObjectIdOrNull(id) {
@@ -43,10 +34,7 @@ function pickProfileFromUser(u) {
     preferredTimes: String(p.preferredTimes ?? u?.preferredTimes ?? p.trainingTimes ?? u?.trainingTimes ?? "").trim(),
     contact: String(p.contact ?? u?.contact ?? "").trim(),
     visibility: p.visibility || u?.visibility || "friends",
-    allowCodeLookup: p.allowCodeLookup !== false && u?.allowCodeLookup !== false,
-    postalCode: String(p.postalCode ?? "").trim(),
-    city: String(p.city ?? "").trim(),
-    country: String(p.country ?? "").trim() || "CH"
+    allowCodeLookup: p.allowCodeLookup !== false && u?.allowCodeLookup !== false
   };
 }
 
@@ -78,9 +66,7 @@ function serializeProfile(user) {
     seasonXp: Number(user?.seasonXp ?? xp),
     trainingsCount,
     profileBonusApplied: Boolean(user?.profileBonusApplied ?? user?.profileBonusGranted ?? false),
-    level,
-    geoUpdatedAt: user?.geoUpdatedAt ?? null,
-    geoPrecision: user?.geoPrecision ?? null
+    level
   };
 }
 
@@ -123,10 +109,7 @@ export async function PUT({ locals, request }) {
     preferredTimes: String(updates?.preferredTimes ?? updates?.trainingTimes ?? "").trim(),
     contact: String(updates?.contact ?? "").trim(),
     visibility: updates?.visibility || "friends",
-    allowCodeLookup: updates?.allowCodeLookup !== false,
-    postalCode: String(updates?.postalCode ?? "").trim(),
-    city: String(updates?.city ?? "").trim(),
-    country: String(updates?.country ?? "").trim() || "CH"
+    allowCodeLookup: updates?.allowCodeLookup !== false
   };
   try {
     assertSafeStrings([
@@ -135,10 +118,7 @@ export async function PUT({ locals, request }) {
       profileDoc.trainingLevel,
       profileDoc.goals,
       profileDoc.preferredTimes,
-      profileDoc.contact,
-      profileDoc.postalCode,
-      profileDoc.city,
-      profileDoc.country
+      profileDoc.contact
     ]);
   } catch {
     return json({ error: "invalid characters" }, { status: 400 });
@@ -156,51 +136,6 @@ export async function PUT({ locals, request }) {
   }
 
   const now = new Date();
-  const previousProfile = pickProfileFromUser(existingUser);
-
-  const addressKeys = ["postalCode", "city", "country"];
-  const addressChanged = addressKeys.some((key) => (profileDoc[key] || "") !== (previousProfile[key] || ""));
-
-  let geoOps = {};
-  let geoMessage = null;
-
-  if (addressChanged) {
-    const anyAddressFilled = addressKeys.some((key) => profileDoc[key]);
-    if (anyAddressFilled) {
-      const allowed = checkGeocodeRateLimit(locals.userId);
-      
-      if (!allowed) {
-        // Soft fail: Wir speichern das Profil, aber warnen den User
-        geoMessage = "Profil gespeichert, aber Standort-Limit erreicht (versuche es später erneut).";
-      } else {
-        try {
-          const result = await geocodeAddress(profileDoc);
-          const geoPoint = result.ok ? normalizeGeoFromGeocode(result, result.precision || "approx") : null;
-          if (result.ok && geoPoint) {
-            await ensureGeoIndex(db);
-            geoOps.$set = {
-              geo: geoPoint,
-              geoUpdatedAt: now,
-              geoSource: "geocoded",
-              geoPrecision: result.precision || "approx"
-            };
-            geoMessage = "Standort aktualisiert";
-          } else {
-            geoOps.$unset = { geo: "", geoSource: "", geoPrecision: "" };
-            geoOps.$set = { ...(geoOps.$set || {}), geoUpdatedAt: null };
-            geoMessage = "Adresse gespeichert, Standort nicht gefunden";
-          }
-        } catch (err) {
-          console.error("Geocoding error:", err);
-          geoMessage = "Profil gespeichert, aber Geocoding-Dienst nicht erreichbar.";
-        }
-      }
-    } else {
-      geoOps.$unset = { geo: "", geoUpdatedAt: "", geoSource: "", geoPrecision: "" };
-      geoMessage = "Adresse entfernt";
-    }
-  }
-
   const updateRes = await users.updateOne(
     { _id: oid },
     {
@@ -214,10 +149,8 @@ export async function PUT({ locals, request }) {
         profile: profileDoc,
         visibility: profileDoc.visibility,
         allowCodeLookup: profileDoc.allowCodeLookup,
-        updatedAt: now,
-        ...(geoOps.$set || {})
-      },
-      ...(geoOps.$unset ? { $unset: geoOps.$unset } : {})
+        updatedAt: now
+      }
     }
   );
 
@@ -239,6 +172,5 @@ export async function PUT({ locals, request }) {
 
   const user = await users.findOne({ _id: oid });
   const response = serializeProfile(user);
-  if (geoMessage) response.geoMessage = geoMessage;
   return json(response);
 }

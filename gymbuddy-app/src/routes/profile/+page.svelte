@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { readSession, writeSession, clearSession, subscribeSession, refreshSession, csrfHeader } from "$lib/session.js";
   import { RANK_ICONS } from "$lib/ranks.config.js";
+  import { rankNameFromXp } from "$lib/rank-utils.js";
   const ACHIEVEMENT_ICONS = import.meta.glob("$lib/assets/achievements/*.svg", { as: "url", eager: true });
 
   let session = $state(readSession());
@@ -24,16 +25,10 @@
   let contact = $state("");
   let visibility = $state("friends");
   let allowCodeLookup = $state(true);
-  let postalCode = $state("");
-  let city = $state("");
-  let country = $state("CH");
-  let geoUpdatedAt = $state(null);
-  let geoStatus = $state("");
 
   let xp = $state(0);
   let lifetimeXp = $state(0);
   let seasonXp = $state(0);
-  let level = $state(1);
   let trainingsCount = $state(0);
   let profileBonusApplied = $state(false);
   let rankInfo = $state(null);
@@ -41,16 +36,10 @@
   let achievementsLoading = $state(false);
   let achievementsError = $state("");
   let achievementsUnlocked = $derived(achievements.filter((a) => a.unlockedAt).length);
+  let rankLabel = $derived(rankInfo?.name || rankNameFromXp(lifetimeXp || xp));
   let notifications = $state([]);
   let notificationsLoading = $state(false);
   let notificationsError = $state("");
-  const ZIP_CITY_MAP = {
-    "8400": "Winterthur",
-    "8404": "Winterthur",
-    "8000": "Zürich",
-    "8001": "Zürich",
-    "8050": "Zürich Oerlikon"
-  };
   const DEMO_NAME_MAP = {
     "demo-auto-1": "Autoaccept Demo 1",
     "demo-auto-2": "Autoaccept Demo 2",
@@ -93,18 +82,6 @@
 
   function rankIcon(key) {
     return RANK_ICONS[key] || RANK_ICONS.apex;
-  }
-
-  function autoFillFromZip(val) {
-    postalCode = val;
-    const guess = ZIP_CITY_MAP[val.trim()];
-    if (guess && !city) city = guess;
-  }
-
-  function autoFillFromCity(val) {
-    city = val;
-    const entry = Object.entries(ZIP_CITY_MAP).find(([, c]) => c.toLowerCase() === val.trim().toLowerCase());
-    if (entry && !postalCode) postalCode = entry[0];
   }
 
   function resolveName(id, fallback = "") {
@@ -155,7 +132,6 @@
         lifetimeXp = Math.max(lifetimeXp, Number(rankInfo.lifetimeXp ?? 0));
         seasonXp = Math.max(seasonXp, Number(rankInfo.seasonXp ?? seasonXp));
         xp = Math.max(xp, Number(rankInfo.lifetimeXp ?? xp));
-        level = Math.max(level, Number(rankInfo.level ?? level ?? 1));
       }
     } catch {
       rankInfo = null;
@@ -235,16 +211,10 @@
       contact = profile?.contact ?? "";
       visibility = profile?.visibility ?? "friends";
       allowCodeLookup = profile?.allowCodeLookup ?? true;
-      postalCode = profile?.postalCode ?? "";
-      city = profile?.city ?? "";
-      country = profile?.country ?? "CH";
-      geoUpdatedAt = profile?.geoUpdatedAt ?? null;
-      geoStatus = profile?.geoMessage ?? "";
 
       xp = profile?.xp ?? 0;
       lifetimeXp = profile?.lifetimeXp ?? xp;
       seasonXp = profile?.seasonXp ?? 0;
-      level = profile?.level ?? 1;
       trainingsCount = profile?.trainingsCount ?? 0;
       profileBonusApplied = !!profile?.profileBonusApplied;
 
@@ -334,10 +304,7 @@
           preferredTimes,
           contact: safeContact,
           visibility,
-          allowCodeLookup: true,
-          postalCode,
-          city,
-          country
+          allowCodeLookup: true
         })
       });
 
@@ -350,12 +317,9 @@
       xp = data?.xp ?? profile?.xp ?? xp;
       lifetimeXp = data?.lifetimeXp ?? xp;
       seasonXp = data?.seasonXp ?? seasonXp;
-      level = data?.level ?? profile?.level ?? level;
       trainingsCount = data?.trainingsCount ?? profile?.trainingsCount ?? trainingsCount;
       profileBonusApplied = !!(data?.profileBonusApplied ?? profile?.profileBonusApplied);
       await loadRank();
-      geoStatus = data?.geoMessage || "";
-      geoUpdatedAt = data?.geoUpdatedAt ?? geoUpdatedAt;
     } catch (e) {
       setError(e?.message || "Profil konnte nicht gespeichert werden.");
     } finally {
@@ -533,23 +497,8 @@
             <div class="text-muted small">Stammdaten, Ziele und Erreichbarkeit.</div>
           </div>
           <div class="d-flex flex-wrap gap-2">
-            <span class="badge text-bg-light">Level {level}</span>
+            <span class="badge text-bg-light">Rank {rankLabel}</span>
             <span class="badge text-bg-light">Trainings {trainingsCount}</span>
-          </div>
-        </div>
-
-        <div class="stat-grid mb-4">
-          <div class="stat-tile">
-            <div class="label">Level</div>
-            <div class="value">{level}</div>
-          </div>
-          <div class="stat-tile">
-            <div class="label">Lifetime XP</div>
-            <div class="value">{lifetimeXp}</div>
-          </div>
-          <div class="stat-tile">
-            <div class="label">Season XP</div>
-            <div class="value">{seasonXp}</div>
           </div>
         </div>
 
@@ -608,45 +557,6 @@
             </div>
           </div>
 
-          <div class="col-12">
-            <div class="border rounded p-3">
-              <h6 class="mb-2">Adresse (für Distanz)</h6>
-              <p class="text-muted small mb-3">
-                Nur PLZ, Ort und Land. Andere sehen nur eine ungefähre Distanz (keine genaue Adresse).
-              </p>
-              <div class="row g-2">
-                <div class="col-sm-4">
-                  <label class="form-label" for="postal">PLZ</label>
-                  <input
-                    id="postal"
-                    class="form-control"
-                    bind:value={postalCode}
-                    maxlength="12"
-                    oninput={(e) => autoFillFromZip(e.target.value)}
-                  />
-                </div>
-                <div class="col-sm-8">
-                  <label class="form-label" for="city">Ort</label>
-                  <input
-                    id="city"
-                    class="form-control"
-                    bind:value={city}
-                    maxlength="50"
-                    oninput={(e) => autoFillFromCity(e.target.value)}
-                  />
-                </div>
-              </div>
-              <label class="form-label mt-2" for="country">Land</label>
-              <input id="country" class="form-control" bind:value={country} maxlength="50" />
-              <div class="text-muted small mt-1">Bekannte Beispiele: 8400 Winterthur, 8000 Zürich.</div>
-              {#if geoStatus}
-                <div class="success-banner py-2 my-2">{geoStatus}</div>
-              {/if}
-              {#if geoUpdatedAt}
-                <div class="text-muted small">Letzte Geolokalisierung: {new Date(geoUpdatedAt).toLocaleString()}</div>
-              {/if}
-            </div>
-          </div>
 
           <div class="col-md-6">
             <label class="form-label" for="visibility">Sichtbarkeit</label>
@@ -660,9 +570,6 @@
             </div>
           </div>
 
-          <div class="col-md-6 d-flex align-items-end">
-            <div class="text-muted small">Codesuche ist für alle Profile erlaubt.</div>
-          </div>
         </div>
 
         <div class="d-flex gap-2 flex-wrap mt-4">

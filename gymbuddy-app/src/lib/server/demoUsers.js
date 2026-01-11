@@ -14,9 +14,6 @@ export const DEMO_USERS = [
       contact: "@demo1",
       visibility: "public",
       allowCodeLookup: true,
-      postalCode: "8400",
-      city: "Winterthur",
-      country: "CH",
       autoAccept: true
     }
   },
@@ -33,9 +30,6 @@ export const DEMO_USERS = [
       contact: "@demo2",
       visibility: "public",
       allowCodeLookup: true,
-      postalCode: "8000",
-      city: "Zürich",
-      country: "CH",
       autoAccept: true
     }
   },
@@ -52,9 +46,6 @@ export const DEMO_USERS = [
       contact: "@demo3",
       visibility: "public",
       allowCodeLookup: true,
-      postalCode: "8404",
-      city: "Winterthur",
-      country: "CH",
       autoAccept: true
     }
   }
@@ -80,20 +71,6 @@ export async function ensureDemoUsers(db) {
             xp: 1200,
             lifetimeXp: 1200,
             seasonXp: 800,
-            geo: u.profile.city
-              ? {
-                  type: "Point",
-                  coordinates:
-                    u.profile.city === "Winterthur"
-                      ? [8.724, 47.498]
-                      : u.profile.city === "Zürich"
-                      ? [8.5417, 47.3769]
-                      : [8.55, 47.38]
-                }
-              : undefined,
-            geoUpdatedAt: new Date(),
-            geoSource: "seed",
-            geoPrecision: "approx"
           },
           $set: {
             profile: u.profile,
