@@ -2,30 +2,19 @@ export async function load({ fetch, locals }) {
   if (!locals.userId) {
     return {
       isAuthenticated: false,
-      stats: { xp: 0, level: 1, trainingsCount: 0 },
-      suggestions: []
+      stats: { xp: 0, trainingsCount: 0 }
     };
   }
 
-  const [profileRes, suggestionsRes] = await Promise.all([
-    fetch("/api/profile"),
-    fetch("/api/buddies/suggestions")
-  ]);
+  const profileRes = await fetch("/api/profile");
 
-  let stats = { xp: 0, level: 1, trainingsCount: 0 };
-  let suggestions = [];
+  let stats = { xp: 0, trainingsCount: 0 };
 
   if (profileRes.ok) {
     const pData = await profileRes.json();
     stats.xp = Number(pData?.xp ?? 0);
     stats.trainingsCount = Number(pData?.trainingsCount ?? 0);
-    stats.level = Number(pData?.level ?? 1);
   }
 
-  if (suggestionsRes.ok) {
-    const sData = await suggestionsRes.json();
-    suggestions = Array.isArray(sData?.suggestions) ? sData.suggestions : [];
-  }
-
-  return { isAuthenticated: true, stats, suggestions };
+  return { isAuthenticated: true, stats };
 }

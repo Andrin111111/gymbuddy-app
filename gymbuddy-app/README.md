@@ -21,22 +21,21 @@
    npm run build
    ```
 
-## What's implemented (current baseline)
+## Core features
 - Server-side sessions stored in MongoDB with TTL, httpOnly cookie `gb_session`.
 - CSRF double-submit token (`gb_csrf` cookie + `x-csrf-token` header) enforced for mutating requests.
 - Auth endpoints (register/login/logout/me/delete) with rate limits and validation.
 - Profile load/update (name, gym, training level, goals, preferred times, contact, visibility).
 - Buddy search with filters (name/email/gym/training level/buddy code) and visibility rules.
 - Friend requests (send/accept/decline/cancel/remove) and blocks.
-- Workouts (create/edit/delete) with exercises/sets and templates.
-- Analytics (weekly stats, best lifts) and XP updates.
-- Ranks + leaderboards, achievements, notifications, buddy suggestions.
+- Workouts (create/edit/delete) with exercises/sets, analytics (weekly stats, best lifts), XP updates.
+- Ranks + leaderboards, achievements, notifications.
 
 ## Missing (future work)
+- Workout templates UI.
 - Chat, scheduling, and shared plans.
 - Push/email notifications and admin tools.
 - Persistent/global rate limiting store.
-- Advanced privacy presets and moderation tools.
 
 ## Deployment (Netlify)
 - Adapter: `@sveltejs/adapter-netlify`

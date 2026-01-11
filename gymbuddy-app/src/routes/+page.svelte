@@ -10,15 +10,9 @@
   let sessionReady = $state(false);
   let clientAuthenticated = $derived(sessionReady && !!session?.userId);
   let isAuthenticated = $derived(clientAuthenticated || (data?.isAuthenticated ?? false));
-  let stats = $state(data?.stats ?? { xp: 0, level: 1, trainingsCount: 0 });
-  let suggestions = $derived(data?.suggestions ?? []);
+  let stats = $state(data?.stats ?? { xp: 0, trainingsCount: 0 });
   let rankLabel = $derived(rankNameFromXp(stats.xp));
   let lastStatsFetchTs = $state(0);
-
-  let suggestionsLoading = $state(false);
-  let clientSuggestions = $state(null);
-  let suggestionsError = $state("");
-  let lastFetchTs = $state(0);
 
   onMount(() => {
     const unsub = subscribeSession((s, ready) => {
@@ -26,7 +20,7 @@
       sessionReady = ready;
       if (ready && s?.userId) refreshStats();
       if (ready && !s?.userId) {
-        stats = { xp: 0, level: 1, trainingsCount: 0 };
+        stats = { xp: 0, trainingsCount: 0 };
       }
     });
     return unsub;
@@ -42,32 +36,9 @@
       if (!res.ok) return;
       stats = {
         xp: Number(json?.xp ?? 0),
-        level: Number(json?.level ?? 1),
         trainingsCount: Number(json?.trainingsCount ?? 0)
       };
     } catch {}
-  }
-
-  async function refreshSuggestions() {
-    const now = Date.now();
-    if (now - lastFetchTs < 60000) return;
-
-    suggestionsLoading = true;
-    suggestionsError = "";
-    try {
-      const res = await fetch("/api/buddies/suggestions");
-      if (res.ok) {
-        const json = await res.json();
-        clientSuggestions = json.suggestions || [];
-        lastFetchTs = now;
-      } else {
-        suggestionsError = "Vorschlaege konnten nicht geladen werden.";
-      }
-    } catch (e) {
-      suggestionsError = e?.message || "Vorschlaege konnten nicht geladen werden.";
-    } finally {
-      suggestionsLoading = false;
-    }
   }
 </script>
 
@@ -115,52 +86,24 @@
   <div class="row g-3">
     <div class="col-lg-7">
       <div class="card p-3 shadow-soft h-100">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <div class="section-title m-0">Buddy Vorschlaege</div>
-          <button class="btn btn-outline-primary btn-sm" type="button" onclick={refreshSuggestions} disabled={suggestionsLoading}>
-            Aktualisieren
-          </button>
-        </div>
-        {#if suggestionsError}
-          <div class="error-banner mb-2">{suggestionsError}</div>
-        {/if}
-        {#if suggestionsLoading}
-          <div class="skeleton" style="height: 96px;"></div>
-          <div class="skeleton mt-2" style="height: 96px;"></div>
-        {:else if (clientSuggestions || suggestions).length === 0}
-          <div class="empty-state">Keine Vorschlaege verfuegbar.</div>
-        {:else}
-          <div class="vstack gap-2">
-            {#each (clientSuggestions || suggestions) as s (s.userId)}
-              <div class="border rounded-12 p-2">
-                <div class="d-flex justify-content-between align-items-start gap-2">
-                  <div>
-                    <div class="fw-semibold">{s.name}</div>
-                    <div class="text-muted small">Score {s.score}</div>
-                    <div class="text-muted small">
-                      {#each s.tags as tag, i (i)}
-                        <span class="chip chip-strong me-1 mb-1">{tag}</span>
-                      {/each}
-                    </div>
-                  </div>
-                  <a class="btn btn-outline-primary btn-sm" href="/buddies">Zum Buddy Tab</a>
-                </div>
-              </div>
-            {/each}
-          </div>
-        {/if}
-      </div>
-    </div>
-    <div class="col-lg-5">
-      <div class="card p-3 shadow-soft h-100">
-        <div class="section-title mb-1">Schnellstart</div>
-        <p class="muted-subtitle">Navigation zu den wichtigsten Bereichen.</p>
+        <div class="section-title mb-2">Schnellstart</div>
+        <p class="muted-subtitle">Starte direkt mit Training oder finde neue Gymbuddies.</p>
         <div class="vstack spacing-sm">
           <a class="btn btn-primary w-100" href="/training">Training erfassen</a>
           <a class="btn btn-outline-primary w-100" href="/buddies">Gymbuddies entdecken</a>
           <a class="btn btn-outline-primary w-100" href="/compare">Vergleich &amp; Leaderboard</a>
           <a class="btn btn-outline-primary w-100" href="/profile">Profil &amp; Achievements</a>
         </div>
+      </div>
+    </div>
+    <div class="col-lg-5">
+      <div class="card p-3 shadow-soft h-100">
+        <div class="section-title mb-2">Dein naechster Schritt</div>
+        <ol class="mb-0 text-muted">
+          <li>Profil pruefen und Sichtbarkeit setzen.</li>
+          <li>Ersten Workout erfassen und XP sammeln.</li>
+          <li>Freundschaftsanfrage senden.</li>
+        </ol>
       </div>
     </div>
   </div>
@@ -170,12 +113,12 @@
       <div class="card p-3 shadow-soft h-100">
         <div class="section-title mb-2">Warum GymBuddy?</div>
         <p class="muted-subtitle">
-          Nutze Trainings-Tracking, Buddy-Finder und Gamification, um dranzubleiben. Erstelle dein Profil, sammle XP und finde Partner in deiner Naehe.
+          Nutze Trainings-Tracking, Buddy-Suche und Ranks, um dranzubleiben. Erstelle dein Profil, sammle XP und finde Trainingspartner im Gym.
         </p>
         <div class="d-flex flex-wrap gap-2">
           <span class="chip chip-strong">XP &amp; Rank</span>
-          <span class="chip chip-strong">Buddy Vorschlaege</span>
-          <span class="chip chip-strong">Trainings-Templates</span>
+          <span class="chip chip-strong">Buddy-Suche</span>
+          <span class="chip chip-strong">Workouts</span>
           <span class="chip chip-strong">Leaderboard</span>
         </div>
       </div>

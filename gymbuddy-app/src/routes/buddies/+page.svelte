@@ -36,6 +36,31 @@
   let gymFilter = $state("");
   let levelFilter = $state("");
 
+  async function parseJsonSafe(res) {
+    try {
+      return await res.json();
+    } catch {
+      try {
+        const txt = await res.text();
+        return { error: txt };
+      } catch {
+        return {};
+      }
+    }
+  }
+
+  async function csrfHeaders(extra = {}) {
+    let headers = { ...extra, ...csrfHeader() };
+    if (!headers["x-csrf-token"]) {
+      try {
+        await fetch("/api/auth/me");
+      } catch {}
+      headers = { ...extra, ...csrfHeader() };
+    }
+    return headers;
+  }
+
+
   async function loadSearch() {
     if (!session?.userId) return;
     hasSearched = true;
@@ -47,14 +72,12 @@
       const code = buddyCodeFilter.trim();
       if (code) {
         params.set("buddyCode", code);
-        // Fallback: manche Backends erwarten "code" statt "buddyCode"
-        params.set("code", code);
       }
       if (gymFilter.trim()) params.set("gym", gymFilter.trim());
       if (levelFilter) params.set("level", levelFilter);
 
       const res = await fetch(`/api/users/search?${params.toString()}`);
-      const data = await res.json().catch(() => ({}));
+      const data = await parseJsonSafe(res);
       if (!res.ok) throw new Error(data?.error || `Suche fehlgeschlagen (Status ${res.status}).`);
       me = data?.me || null;
       results = Array.isArray(data?.results) ? data.results : [];
@@ -72,7 +95,7 @@
     requestsError = "";
     try {
       const res = await fetch("/api/friendRequests");
-      const data = await res.json().catch(() => ({}));
+      const data = await parseJsonSafe(res);
       if (!res.ok) throw new Error(data?.error || "Anfragen konnten nicht geladen werden.");
       incoming = Array.isArray(data?.incoming) ? data.incoming : [];
       outgoing = Array.isArray(data?.outgoing) ? data.outgoing : [];
@@ -90,7 +113,7 @@
     friendsLoading = true;
     try {
       const res = await fetch("/api/friends");
-      const data = await res.json().catch(() => ({}));
+      const data = await parseJsonSafe(res);
       if (!res.ok) throw new Error(data?.error || "Freunde konnten nicht geladen werden.");
       friends = Array.isArray(data?.friends) ? data.friends : [];
     } catch (e) {
@@ -106,7 +129,7 @@
     blockLoading = true;
     try {
       const res = await fetch("/api/blocks");
-      const data = await res.json().catch(() => ({}));
+      const data = await parseJsonSafe(res);
       if (!res.ok) throw new Error(data?.error || "Blockliste konnte nicht geladen werden.");
       blocks = Array.isArray(data?.blocks) ? data.blocks : [];
     } catch (e) {
@@ -121,13 +144,14 @@
     setError("");
     reqLoading = true;
     try {
+      const headers = await csrfHeaders({ "Content-Type": "application/json" });
       const res = await fetch("/api/friendRequests", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...csrfHeader() },
+        headers,
         body: JSON.stringify({ toUserId: targetId })
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Anfrage konnte nicht gesendet werden.");
+      const data = await parseJsonSafe(res);
+      if (!res.ok) throw new Error(data?.error || `Anfrage konnte nicht gesendet werden (Status ${res.status}).`);
       await loadRequests();
       await loadSearch();
     } catch (e) {
@@ -141,12 +165,13 @@
     setError("");
     reqLoading = true;
     try {
+      const headers = await csrfHeaders();
       const res = await fetch(`/api/friendRequests/${id}/accept`, {
         method: "POST",
-        headers: { ...csrfHeader() }
+        headers
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Anfrage konnte nicht angenommen werden.");
+      const data = await parseJsonSafe(res);
+      if (!res.ok) throw new Error(data?.error || `Anfrage konnte nicht angenommen werden (Status ${res.status}).`);
       await Promise.all([loadRequests(), loadFriends(), loadSearch()]);
     } catch (e) {
       setError(e?.message || "Anfrage konnte nicht angenommen werden.");
@@ -159,12 +184,13 @@
     setError("");
     reqLoading = true;
     try {
+      const headers = await csrfHeaders();
       const res = await fetch(`/api/friendRequests/${id}/decline`, {
         method: "POST",
-        headers: { ...csrfHeader() }
+        headers
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Anfrage konnte nicht abgelehnt werden.");
+      const data = await parseJsonSafe(res);
+      if (!res.ok) throw new Error(data?.error || `Anfrage konnte nicht abgelehnt werden (Status ${res.status}).`);
       await Promise.all([loadRequests(), loadSearch()]);
     } catch (e) {
       setError(e?.message || "Anfrage konnte nicht abgelehnt werden.");
@@ -177,11 +203,12 @@
     setError("");
     reqLoading = true;
     try {
+      const headers = await csrfHeaders();
       const res = await fetch(`/api/friendRequests/${id}/cancel`, {
         method: "POST",
-        headers: { ...csrfHeader() }
+        headers
       });
-      const data = await res.json().catch(() => ({}));
+      const data = await parseJsonSafe(res);
       if (!res.ok) throw new Error(data?.error || "Anfrage konnte nicht zurückgezogen werden.");
       await Promise.all([loadRequests(), loadSearch()]);
     } catch (e) {
@@ -195,13 +222,14 @@
     setError("");
     friendsLoading = true;
     try {
+      const headers = await csrfHeaders({ "Content-Type": "application/json" });
       const res = await fetch("/api/friends/remove", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...csrfHeader() },
+        headers,
         body: JSON.stringify({ targetUserId: targetId })
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Freund konnte nicht entfernt werden.");
+      const data = await parseJsonSafe(res);
+      if (!res.ok) throw new Error(data?.error || `Freund konnte nicht entfernt werden (Status ${res.status}).`);
       await Promise.all([loadFriends(), loadSearch()]);
     } catch (e) {
       setError(e?.message || "Freund konnte nicht entfernt werden.");
@@ -214,13 +242,14 @@
     setError("");
     blockLoading = true;
     try {
+      const headers = await csrfHeaders({ "Content-Type": "application/json" });
       const res = await fetch("/api/blocks", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...csrfHeader() },
+        headers,
         body: JSON.stringify({ targetUserId: targetId, action: "block" })
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Blocken fehlgeschlagen.");
+      const data = await parseJsonSafe(res);
+      if (!res.ok) throw new Error(data?.error || `Blocken fehlgeschlagen (Status ${res.status}).`);
       await Promise.all([loadBlocks(), loadFriends(), loadRequests(), loadSearch()]);
     } catch (e) {
       setError(e?.message || "Blocken fehlgeschlagen.");
@@ -233,16 +262,17 @@
     setError("");
     blockLoading = true;
     try {
+      const headers = await csrfHeaders({ "Content-Type": "application/json" });
       const res = await fetch("/api/blocks", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...csrfHeader() },
+        headers,
         body: JSON.stringify({ targetUserId, action: "unblock" })
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Unblocken fehlgeschlagen.");
+      const data = await parseJsonSafe(res);
+      if (!res.ok) throw new Error(data?.error || `Entsperren fehlgeschlagen (Status ${res.status}).`);
       await Promise.all([loadBlocks(), loadSearch()]);
     } catch (e) {
-      setError(e?.message || "Unblocken fehlgeschlagen.");
+      setError(e?.message || "Entsperren fehlgeschlagen.");
     } finally {
       blockLoading = false;
     }

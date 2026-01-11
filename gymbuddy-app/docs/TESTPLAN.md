@@ -9,19 +9,18 @@
 - Netlify fresh visit: no cookie => UI logged out, `/api/auth/me` -> 401.
 
 ## CSRF
-- POST without `x-csrf-token` or wrong token -> 403 (e.g. `/api/profile`, `/api/trainings`, `/api/friends/request`, workouts/templates/exercises).
+- POST without `x-csrf-token` or wrong token -> 403 (e.g. `/api/profile`, `/api/workouts`, `/api/friendRequests`, blocks/templates/exercises).
 - POST with correct token (cookie == header) -> 200.
 
 ## Profile
 - Load profile after login -> fields populated including `contact`.
 - Save profile -> values persist after reload; XP bonus (30) applied once, UI stays consistent.
 
-## Trainings / Workouts
-- Training (legacy) create/delete still works and updates summary.
+## Workouts
 - Workout create (with/without buddy) -> appears in list; summary updated.
 - Workout edit -> changes saved; date not shifted; exercises/sets persisted.
 - Workout delete -> entry removed; summary updated.
-- Unauthorized: `/api/workouts` or `/api/trainings` without session -> 401.
+- Unauthorized: `/api/workouts` without session -> 401.
 
 ## Workouts Extras
 - Exercise catalog loads; custom exercise creation limited to 100/user.
@@ -33,9 +32,10 @@
 - After edit/delete, PR cache and volume stay consistent (check `/api/analytics/exercise/{key}`).
 
 ## Buddies/Friends
-- `/api/buddies` without session -> 401.
-- With session: list loads; filters (gym, level, buddyCode) work.
+- `/api/users/search` without session -> 401.
+- With session: filters (name/email/gym/training level/buddyCode) work; visibility enforced.
 - Friend request send/accept/decline/cancel/remove -> status visible; limit >20/day -> 429.
+- Block/unblock -> blocked users disappear from search and friends list.
 
 ## Security
 - NoSQL injection: strings containing `$` or `.` rejected in inputs (profile/buddies/workouts/etc.).
@@ -51,10 +51,3 @@
 ## Build/Deploy
 - `npm run build` green.
 - Netlify env: `MONGODB_URI`, `MONGODB_DB_NAME`, `SESSION_SECRET`, `CSRF_SECRET`, `APP_ORIGIN` set.
-
-## Geo / Distance
-- Save profile with valid address -> geocode succeeds, `geoUpdatedAt` set, distance filter usable.
-- Save profile with invalid address -> address persists, geo cleared, warning shown ("Address saved, location not found").
-- Buddy search with maxDistance and user has geo -> results limited to that radius; computedDistanceKm shown, no raw address/coords in payload.
-- Buddy search with maxDistance but no geo -> filter ignored, hint shown to add address.
-- Buddy search without maxDistance -> users without geo included with "Distanz: unbekannt".
