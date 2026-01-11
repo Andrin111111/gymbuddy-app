@@ -98,9 +98,9 @@
     </div>
     <div class="col-lg-5">
       <div class="card p-3 shadow-soft h-100">
-        <div class="section-title mb-2">Dein naechster Schritt</div>
+        <div class="section-title mb-2">Dein n&auml;chster Schritt</div>
         <ol class="mb-0 text-muted">
-          <li>Profil pruefen und Sichtbarkeit setzen.</li>
+          <li>Profil pr&uuml;fen und Sichtbarkeit setzen.</li>
           <li>Ersten Workout erfassen und XP sammeln.</li>
           <li>Freundschaftsanfrage senden.</li>
         </ol>
