@@ -566,7 +566,7 @@
               <option value="private">Privat</option>
             </select>
             <div class="text-muted small mt-1">
-              Gilt fürs gesamte Profil. Buddy-Code-Suche funktioniert immer, auch bei privater Sichtbarkeit.
+              Steuert, wer dich in der Suche sieht.
             </div>
           </div>
 

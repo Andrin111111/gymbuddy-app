@@ -73,7 +73,7 @@
   let templates = $state([]);
   let exercisesCatalog = $state({ all: [], builtIn: [], custom: [] });
   let friends = $state([]);
-  let summary = $state({ xp: 0, level: 1, trainingsCount: 0 });
+  let summary = $state({ xp: 0, trainingsCount: 0 });
   let analytics = $state({ workoutsThisWeek: 0, totalVolumeThisWeek: 0, bestLifts: [] });
   let rankLabel = $derived(rankNameFromXp(summary.xp));
 
@@ -200,7 +200,6 @@
     if (data?.summary) {
       summary = {
         xp: Number(data.summary.xp ?? summary.xp),
-        level: Number(data.summary.level ?? summary.level),
         trainingsCount: Number(data.summary.trainingsCount ?? summary.trainingsCount)
       };
     }
@@ -214,7 +213,6 @@
       if (!res.ok) return;
       summary = {
         xp: Number(data?.xp ?? data?.lifetimeXp ?? summary.xp),
-        level: Number(data?.level ?? summary.level),
         trainingsCount: Number(data?.trainingsCount ?? summary.trainingsCount)
       };
     } catch {
@@ -561,7 +559,7 @@
         workouts = [];
         templates = [];
         friends = [];
-        summary = { xp: 0, level: 1, trainingsCount: 0 };
+        summary = { xp: 0, trainingsCount: 0 };
         analytics = { workoutsThisWeek: 0, totalVolumeThisWeek: 0, bestLifts: [] };
       }
     });

@@ -11,7 +11,6 @@
    - `SESSION_SECRET` (required)
    - `CSRF_SECRET` (required)
    - `APP_ORIGIN` (required; e.g. https://your-app.netlify.app)
-   - `GEOCODING_API_KEY` (required for address->geo via OpenCage)
    - Optional: `RATE_LIMIT_REDIS_URL`, `EMAIL_SMTP_URL`, `NODE_ENV`
 3. Run dev  
    ```bash
@@ -26,25 +25,18 @@
 - Server-side sessions stored in MongoDB with TTL, httpOnly cookie `gb_session`.
 - CSRF double-submit token (`gb_csrf` cookie + `x-csrf-token` header) enforced for mutating requests.
 - Auth endpoints (register/login/logout/me/delete) with rate limits and validation.
-- Profile load/update (contact persists) with server XP bonus application.
-- Trainings create/list/delete with server XP updates.
-- Buddies list + client filters; Friend request accept/decline/cancel/remove (no blocks/visibility yet).
-- In-memory rate limits: login/register/friend requests.
-- Input validation via Zod on existing endpoints.
-- Profile address + server geocoding (OpenCage) with rounded coordinates; buddy search can filter by distance (no raw address/coords are exposed, only city/PLZ and approximate km).
+- Profile load/update (name, gym, training level, goals, preferred times, contact, visibility).
+- Buddy search with filters (name/email/gym/training level/buddy code) and visibility rules.
+- Friend requests (send/accept/decline/cancel/remove) and blocks.
+- Workouts (create/edit/delete) with exercises/sets and templates.
+- Analytics (weekly stats, best lifts) and XP updates.
+- Ranks + leaderboards, achievements, notifications, buddy suggestions.
 
 ## Missing (future work)
-- Full workout model (exercises/sets, edit, PRs, templates).
-- Privacy/visibility, blocks, buddy search filters with enforcement.
-- XP caps, ranks, seasons, achievements, notifications.
-- Suggestions, feed, challenges, chat, scheduling.
+- Chat, scheduling, and shared plans.
+- Push/email notifications and admin tools.
 - Persistent/global rate limiting store.
-- Distance-based matching refinements.
-
-## Geocoding provider
-- Provider: OpenCage (`https://api.opencagedata.com/geocode/v1/json`).
-- Env var: `GEOCODING_API_KEY` (set in Netlify).
-- Privacy: stored geo is rounded (approx), address lines/coords are never returned to other users, only city/PLZ + approx distance.
+- Advanced privacy presets and moderation tools.
 
 ## Deployment (Netlify)
 - Adapter: `@sveltejs/adapter-netlify`
