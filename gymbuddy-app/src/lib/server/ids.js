@@ -1,4 +1,4 @@
-// src/lib/server/ids.js
+// Datei: src/lib/server/ids.js
 
 /**
  * Generiert einen 6-stelligen Buddy-Code als String.

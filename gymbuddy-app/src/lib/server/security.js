@@ -1,4 +1,4 @@
-// src/lib/server/security.js
+// Datei: src/lib/server/security.js
 import crypto from "node:crypto";
 
 const ITERATIONS = 150000;

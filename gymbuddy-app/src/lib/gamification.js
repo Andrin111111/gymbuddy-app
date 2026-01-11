@@ -1,4 +1,4 @@
-// src/lib/gamification.js
+// Datei: src/lib/gamification.js
 // Zentrale Gamification Logik
 
 export const XP_PROFILE_BONUS = 30;

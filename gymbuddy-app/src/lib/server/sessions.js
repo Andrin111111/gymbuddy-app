@@ -1,4 +1,4 @@
-// src/lib/server/sessions.js
+// Datei: src/lib/server/sessions.js
 import crypto from "node:crypto";
 import { getDb } from "./mongo.js";
 import { isProduction } from "./env.js";

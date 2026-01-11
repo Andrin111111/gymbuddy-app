@@ -1,4 +1,4 @@
-// src/lib/server/env.js
+// Datei: src/lib/server/env.js
 import { env as privateEnv } from "$env/dynamic/private";
 import { z } from "zod";
 

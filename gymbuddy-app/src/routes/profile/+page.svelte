@@ -193,7 +193,7 @@
       await fetch(`/api/notifications/${id}/read`, { method: "POST", headers: { ...csrfHeader() } });
       notifications = notifications.map((n) => (n._id === id ? { ...n, read: true } : n));
     } catch {
-      // ignore
+      // Fehler ignorieren
     }
   }
 

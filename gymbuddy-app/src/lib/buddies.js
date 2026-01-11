@@ -1,4 +1,4 @@
-// Static buddy lookup used by the buddies/[id] route
+// Statische Buddy-Liste fuer die buddies/[id]-Route
 const BUDDIES = [
   {
     id: "buddy-1",

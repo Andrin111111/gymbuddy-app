@@ -1,4 +1,4 @@
-// src/lib/server/workouts.js
+// Datei: src/lib/server/workouts.js
 import { z } from "zod";
 import { getDb } from "./mongo.js";
 import { BUILT_IN_EXERCISES } from "$lib/data/exercises.js";

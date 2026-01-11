@@ -87,7 +87,7 @@ export async function POST({ locals, request }) {
     { upsert: true }
   );
 
-  // remove friendships and pending requests between the two
+  // Freundschaften und offene Anfragen zwischen beiden entfernen
   await users.updateOne(
     { _id: toObjectIdOrNull(locals.userId) ?? locals.userId },
     {

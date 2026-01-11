@@ -1,5 +1,5 @@
-// src/lib/session.js
-// Client-side session helper: keeps a local snapshot of the server session (httpOnly cookie-backed).
+// Datei: src/lib/session.js
+// Clientseitiger Session-Helper: haelt eine lokale Kopie der Server-Session (httpOnly-Cookie-basiert).
 
 let currentSession = null;
 let readyFlag = false;

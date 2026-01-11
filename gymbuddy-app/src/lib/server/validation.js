@@ -1,4 +1,4 @@
-// src/lib/server/validation.js
+// Datei: src/lib/server/validation.js
 
 export function hasDangerousKeyChars(str) {
   if (typeof str !== "string") return false;

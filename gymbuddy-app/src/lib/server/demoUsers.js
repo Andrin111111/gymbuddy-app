@@ -1,4 +1,4 @@
-// src/lib/server/demoUsers.js
+// Datei: src/lib/server/demoUsers.js
 
 export const DEMO_USERS = [
   {

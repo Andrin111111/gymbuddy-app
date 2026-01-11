@@ -1,4 +1,4 @@
-// src/lib/server/csrf.js
+// Datei: src/lib/server/csrf.js
 import crypto from "node:crypto";
 import { isProduction } from "./env.js";
 
@@ -21,7 +21,7 @@ export function ensureCsrfCookie(cookies) {
 }
 
 export function validateCsrf(event) {
-  // Allow safe methods
+  // Sichere Methoden zulassen
   if (event.request.method === "GET" || event.request.method === "HEAD" || event.request.method === "OPTIONS") {
     return true;
   }

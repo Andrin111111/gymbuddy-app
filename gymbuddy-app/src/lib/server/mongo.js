@@ -1,4 +1,4 @@
-// src/lib/server/mongo.js
+// Datei: src/lib/server/mongo.js
 import { MongoClient } from "mongodb";
 import { getEnv } from "./env.js";
 

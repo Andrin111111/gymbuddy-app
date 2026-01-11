@@ -216,7 +216,7 @@
         trainingsCount: Number(data?.trainingsCount ?? summary.trainingsCount)
       };
     } catch {
-      // ignore
+      // Fehler ignorieren
     }
   }
 

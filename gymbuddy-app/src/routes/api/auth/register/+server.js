@@ -1,4 +1,4 @@
-// src/routes/api/auth/register/+server.js
+// Datei: src/routes/api/auth/register/+server.js
 import { json } from "@sveltejs/kit";
 import { z } from "zod";
 import { getDb } from "$lib/server/mongo";

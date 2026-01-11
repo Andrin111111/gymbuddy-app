@@ -1,4 +1,4 @@
-// src/lib/server/ranks.js
+// Datei: src/lib/server/ranks.js
 import { RANKS } from "$lib/ranks.config.js";
 import { getDb } from "./mongo.js";
 

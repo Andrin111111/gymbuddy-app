@@ -1,4 +1,4 @@
-// src/routes/api/auth/login/+server.js
+// Datei: src/routes/api/auth/login/+server.js
 import { json } from "@sveltejs/kit";
 import { z } from "zod";
 import { getDb } from "$lib/server/mongo";
@@ -20,7 +20,7 @@ export async function POST({ request, cookies }) {
     }
     const { email, password } = parsed.data;
 
-    // Rate limit: per IP and per email
+    // Rate-Limit: pro IP und pro E-Mail
     const ip = request.headers.get("x-forwarded-for") || "ip-unknown";
     if (!rateLimit(`login:ip:${ip}`, 10, 10 * 60 * 1000)) {
       return json({ error: "Zu viele Login-Versuche. Bitte warten." }, { status: 429 });

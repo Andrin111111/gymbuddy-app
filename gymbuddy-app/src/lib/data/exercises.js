@@ -1,5 +1,5 @@
-// src/lib/data/exercises.js
-// Built-in exercise catalog for quick selection in workouts/templates.
+// Datei: src/lib/data/exercises.js
+// Eingebauter Uebungskatalog fuer schnelle Auswahl in Workouts/Vorlagen.
 
 export const BUILT_IN_EXERCISES = [
   { key: "back_squat", name: "Back Squat", muscleGroup: "legs", equipment: "barbell", isBodyweight: false },

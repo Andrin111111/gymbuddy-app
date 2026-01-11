@@ -1,4 +1,4 @@
-// src/lib/ranks.config.js
+// Datei: src/lib/ranks.config.js
 import starterIcon from "$lib/assets/ranks/starter.svg";
 import rookieIcon from "$lib/assets/ranks/rookie.svg";
 import grinderIcon from "$lib/assets/ranks/grinder.svg";

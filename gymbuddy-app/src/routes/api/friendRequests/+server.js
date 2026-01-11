@@ -28,7 +28,7 @@ async function ensureIndexes(db) {
   try {
     await col.createIndex({ fromUserId: 1, toUserId: 1, status: 1 });
   } catch (err) {
-    // Index ist nice-to-have, nicht kritisch fuer den Ablauf.
+    // Index ist optional und nicht kritisch fuer den Ablauf.
     console.warn("friendRequests: index skipped", err?.message || err);
   }
 }
@@ -211,7 +211,7 @@ export async function POST({ locals, request }) {
       const { createNotification } = await import("$lib/server/notifications.js");
       await createNotification(userId, "friend_request_accepted", { byUserId: toUserId });
     } catch {
-      // ignore notification errors
+      // Benachrichtigungsfehler ignorieren
     }
     return json({ ok: true, requestId: String(res.insertedId), autoAccepted: true });
   } else {
@@ -228,7 +228,7 @@ export async function POST({ locals, request }) {
       const { createNotification } = await import("$lib/server/notifications.js");
       await createNotification(toUserId, "friend_request_received", { fromUserId: userId });
     } catch {
-      // ignore notification errors
+      // Benachrichtigungsfehler ignorieren
     }
 
     return json({ ok: true, requestId: String(res.insertedId) });

@@ -1,28 +1,28 @@
-// src/lib/server/achievements.js
+// Datei: src/lib/server/achievements.js
 import { getDb } from "./mongo.js";
 import { getRankFromXp } from "./ranks.js";
 
 export const ACHIEVEMENTS_CATALOG = [
-  // Streak
+  // Serie
   { key: "streak_3", name: "Streak 3", category: "streak", description: "Logge Workouts an 3 Tagen in Folge." },
   { key: "streak_7", name: "Streak 7", category: "streak", description: "Logge Workouts an 7 Tagen in Folge." },
   { key: "streak_14", name: "Streak 14", category: "streak", description: "Logge Workouts an 14 Tagen in Folge." },
   { key: "streak_30", name: "Streak 30", category: "streak", description: "Logge Workouts an 30 Tagen in Folge." },
   { key: "streak_100", name: "Streak 100", category: "streak", description: "Logge Workouts an 100 Tagen in Folge." },
-  // Total workouts
+  // Workouts gesamt
   { key: "workouts_10", name: "Workouts 10", category: "workouts", description: "Erfasse 10 Workouts insgesamt." },
   { key: "workouts_25", name: "Workouts 25", category: "workouts", description: "Erfasse 25 Workouts insgesamt." },
   { key: "workouts_50", name: "Workouts 50", category: "workouts", description: "Erfasse 50 Workouts insgesamt." },
   { key: "workouts_100", name: "Workouts 100", category: "workouts", description: "Erfasse 100 Workouts insgesamt." },
   { key: "workouts_250", name: "Workouts 250", category: "workouts", description: "Erfasse 250 Workouts insgesamt." },
   { key: "workouts_500", name: "Workouts 500", category: "workouts", description: "Erfasse 500 Workouts insgesamt." },
-  // PR count
+  // PR-Anzahl
   { key: "prs_10", name: "PRs 10", category: "prs", description: "Erreiche 10 neue Bestleistungen (Gewicht pro Übung)." },
   { key: "prs_25", name: "PRs 25", category: "prs", description: "Erreiche 25 neue Bestleistungen (Gewicht pro Übung)." },
   { key: "prs_50", name: "PRs 50", category: "prs", description: "Erreiche 50 neue Bestleistungen (Gewicht pro Übung)." },
   { key: "prs_100", name: "PRs 100", category: "prs", description: "Erreiche 100 neue Bestleistungen (Gewicht pro Übung)." },
   { key: "prs_250", name: "PRs 250", category: "prs", description: "Erreiche 250 neue Bestleistungen (Gewicht pro Übung)." },
-  // Social
+  // Sozial
   { key: "friends_1", name: "Friends 1", category: "social", description: "1 Freundschaft bestätigt." },
   { key: "friends_5", name: "Friends 5", category: "social", description: "5 Freundschaften bestätigt." },
   { key: "friends_10", name: "Friends 10", category: "social", description: "10 Freundschaften bestätigt." },
@@ -30,11 +30,11 @@ export const ACHIEVEMENTS_CATALOG = [
   { key: "train_with_buddy_5", name: "Buddy Sessions 5", category: "social", description: "5 Workouts mit einem Buddy geloggt." },
   { key: "train_with_buddy_25", name: "Buddy Sessions 25", category: "social", description: "25 Workouts mit einem Buddy geloggt." },
   { key: "train_with_buddy_100", name: "Buddy Sessions 100", category: "social", description: "100 Workouts mit einem Buddy geloggt." },
-  // Consistency
+  // Konstanz
   { key: "weeks_active_4", name: "Weeks Active 4", category: "consistency", description: "In 4 Wochen mindestens 1 Workout pro Woche." },
   { key: "weeks_active_12", name: "Weeks Active 12", category: "consistency", description: "In 12 Wochen mindestens 1 Workout pro Woche." },
   { key: "weeks_active_24", name: "Weeks Active 24", category: "consistency", description: "In 24 Wochen mindestens 1 Workout pro Woche." },
-  // Season
+  // Saison
   { key: "season_top_10_friends", name: "Season Top 10", category: "season", description: "Top 10 im Friends-Season-Leaderboard." },
   { key: "season_top_3_friends", name: "Season Top 3", category: "season", description: "Top 3 im Friends-Season-Leaderboard." },
   { key: "season_top_1_friends", name: "Season Winner", category: "season", description: "Platz 1 im Friends-Season-Leaderboard." }

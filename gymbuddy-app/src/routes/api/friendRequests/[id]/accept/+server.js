@@ -40,7 +40,7 @@ export async function POST({ locals, params }) {
     const { createNotification } = await import("$lib/server/notifications.js");
     await createNotification(fromId, "friend_request_accepted", { byUserId: toId });
   } catch {
-    // ignore notification errors
+    // Benachrichtigungsfehler ignorieren
   }
 
   return json({ ok: true });

@@ -1,5 +1,5 @@
-// src/lib/server/rateLimit.js
-// Simple in-memory rate limiter (per instance). For production, replace with Redis if RATE_LIMIT_REDIS_URL is set.
+// Datei: src/lib/server/rateLimit.js
+// Einfacher In-Memory-Rate-Limiter (pro Instanz). Fuer Produktion durch Redis ersetzen, falls RATE_LIMIT_REDIS_URL gesetzt ist.
 const buckets = new Map();
 
 function nowMs() {

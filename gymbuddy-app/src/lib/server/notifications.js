@@ -23,7 +23,7 @@ export async function createNotification(userId, type, payload = {}) {
   };
   await col.insertOne(doc);
 
-  // enforce max 200 per user, remove oldest beyond limit
+  // Maximal 200 pro Nutzer; aelteste darueber entfernen.
   const count = await col.countDocuments({ userId: String(userId) });
   if (count > MAX_NOTIFICATIONS) {
     const toDelete = count - MAX_NOTIFICATIONS;
