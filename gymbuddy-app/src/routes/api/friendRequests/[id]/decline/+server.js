@@ -22,7 +22,9 @@ export async function POST({ locals, params }) {
   const users = db.collection("users");
 
   const request = await col.findOne({ _id: oid });
-  if (!request || request.toUserId !== String(locals.userId) || request.status !== "pending") {
+  const toId = String(request?.toUserId ?? "");
+  const fromId = String(request?.fromUserId ?? "");
+  if (!request || toId !== String(locals.userId) || request.status !== "pending") {
     return json({ error: "not found" }, { status: 404 });
   }
 
@@ -33,12 +35,12 @@ export async function POST({ locals, params }) {
   );
 
   await users.updateOne(
-    { _id: toObjectIdOrNull(request.toUserId) ?? request.toUserId },
-    { $pull: { friendRequestsIn: request.fromUserId } }
+    { _id: toObjectIdOrNull(toId) ?? toId },
+    { $pull: { friendRequestsIn: fromId } }
   );
   await users.updateOne(
-    { _id: toObjectIdOrNull(request.fromUserId) ?? request.fromUserId },
-    { $pull: { friendRequestsOut: request.toUserId } }
+    { _id: toObjectIdOrNull(fromId) ?? fromId },
+    { $pull: { friendRequestsOut: toId } }
   );
 
   return json({ ok: true });

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { ObjectId } from "mongodb";
 import { getDb } from "$lib/server/mongo.js";
 import { assertSafeStrings } from "$lib/server/validation.js";
-import { DEMO_USERS, ensureDemoUsers } from "$lib/server/demoUsers.js";
+import { DEMO_USERS } from "$lib/server/demoUsers.js";
 
 const sendSchema = z.object({
   toUserId: z.string().trim().min(1)
@@ -17,15 +17,27 @@ function toObjectIdOrNull(id) {
   }
 }
 
+function idCandidates(id) {
+  const str = String(id);
+  const oid = toObjectIdOrNull(str);
+  return oid ? [str, oid] : [str];
+}
+
 async function ensureIndexes(db) {
   const col = db.collection("friendRequests");
-  await col.createIndex({ fromUserId: 1, toUserId: 1, status: 1 });
+  try {
+    await col.createIndex({ fromUserId: 1, toUserId: 1, status: 1 });
+  } catch (err) {
+    // Index ist nice-to-have, nicht kritisch fuer den Ablauf.
+    console.warn("friendRequests: index skipped", err?.message || err);
+  }
 }
 
 export async function GET({ locals }) {
   if (!locals.userId) return json({ error: "unauthorized" }, { status: 401 });
 
   const userId = String(locals.userId);
+  const userIdCandidates = idCandidates(userId);
   const db = await getDb();
   const col = db.collection("friendRequests");
   const users = db.collection("users");
@@ -33,16 +45,20 @@ export async function GET({ locals }) {
 
   const incoming = (
     await col
-      .find({ toUserId: userId, status: "pending" })
+      .find({ toUserId: { $in: userIdCandidates }, status: "pending" })
       .sort({ createdAt: -1 })
       .toArray()
-  ).filter((r) => !DEMO_USERS.find((d) => d._id === r.fromUserId));
+  )
+    .map((r) => ({ ...r, fromUserId: String(r.fromUserId), toUserId: String(r.toUserId) }))
+    .filter((r) => !DEMO_USERS.find((d) => d._id === r.fromUserId));
   const outgoing = (
     await col
-      .find({ fromUserId: userId, status: "pending" })
+      .find({ fromUserId: { $in: userIdCandidates }, status: "pending" })
       .sort({ createdAt: -1 })
       .toArray()
-  ).filter((r) => !DEMO_USERS.find((d) => d._id === r.toUserId));
+  )
+    .map((r) => ({ ...r, fromUserId: String(r.fromUserId), toUserId: String(r.toUserId) }))
+    .filter((r) => !DEMO_USERS.find((d) => d._id === r.toUserId));
 
   const userIds = [
     ...incoming.map((r) => r.fromUserId),
@@ -99,7 +115,9 @@ export async function POST({ locals, request }) {
   if (!parsed.success) return json({ error: "invalid toUserId" }, { status: 400 });
 
   const userId = String(locals.userId);
+  const userIdCandidates = idCandidates(userId);
   const toUserId = String(parsed.data.toUserId).trim();
+  const toUserIdCandidates = idCandidates(toUserId);
   if (userId === toUserId) return json({ error: "cannot add yourself" }, { status: 400 });
   try {
     assertSafeStrings([toUserId]);
@@ -112,7 +130,6 @@ export async function POST({ locals, request }) {
   const users = db.collection("users");
   const blocks = db.collection("blocks");
   await ensureIndexes(db);
-  await ensureDemoUsers(db);
 
   if (DEMO_USERS.find((d) => d._id === toUserId)) {
     return json({ error: "target not found" }, { status: 404 });
@@ -125,37 +142,37 @@ export async function POST({ locals, request }) {
   if (!toUser) return json({ error: "target not found" }, { status: 404 });
 
   const alreadyBlocked =
-    (await blocks.findOne({ userId, targetUserId: toUserId })) ||
-    (await blocks.findOne({ userId: toUserId, targetUserId: userId }));
+    (await blocks.findOne({ userId: { $in: userIdCandidates }, targetUserId: { $in: toUserIdCandidates } })) ||
+    (await blocks.findOne({ userId: { $in: toUserIdCandidates }, targetUserId: { $in: userIdCandidates } }));
   if (alreadyBlocked) return json({ error: "interaction not allowed" }, { status: 400 });
 
   const friendList = Array.isArray(toUser.friends) ? toUser.friends.map(String) : [];
   if (friendList.includes(userId)) return json({ error: "already friends" }, { status: 400 });
 
-  const pendingOut = await col.countDocuments({ fromUserId: userId, status: "pending" });
-  const pendingIn = await col.countDocuments({ toUserId: toUserId, status: "pending" });
+  const pendingOut = await col.countDocuments({ fromUserId: { $in: userIdCandidates }, status: "pending" });
+  const pendingIn = await col.countDocuments({ toUserId: { $in: toUserIdCandidates }, status: "pending" });
   if (pendingOut >= 30) return json({ error: "pending limit reached" }, { status: 429 });
   if (pendingIn >= 50) return json({ error: "target pending limit reached" }, { status: 429 });
 
   const existing = await col.findOne({
-    fromUserId: userId,
-    toUserId,
+    fromUserId: { $in: userIdCandidates },
+    toUserId: { $in: toUserIdCandidates },
     status: { $in: ["pending", "accepted"] }
   });
   if (existing && existing.status === "pending") {
     return json({ error: "already pending" }, { status: 400 });
   }
   const incomingExisting = await col.findOne({
-    fromUserId: toUserId,
-    toUserId: userId,
+    fromUserId: { $in: toUserIdCandidates },
+    toUserId: { $in: userIdCandidates },
     status: "pending"
   });
   if (incomingExisting) {
     return json({ error: "incoming request exists" }, { status: 400 });
   }
   const recentDecline = await col.findOne({
-    fromUserId: userId,
-    toUserId,
+    fromUserId: { $in: userIdCandidates },
+    toUserId: { $in: toUserIdCandidates },
     status: "declined",
     updatedAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
   });
@@ -169,7 +186,15 @@ export async function POST({ locals, request }) {
     createdAt: now,
     updatedAt: now
   };
-  const res = await col.insertOne(doc);
+  let res;
+  try {
+    res = await col.insertOne(doc);
+  } catch (err) {
+    if (err?.code === 11000) {
+      return json({ error: "already pending" }, { status: 409 });
+    }
+    throw err;
+  }
 
   if (toUser.autoAccept) {
     await Promise.all([

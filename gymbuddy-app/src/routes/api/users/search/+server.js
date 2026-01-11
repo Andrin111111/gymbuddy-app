@@ -20,6 +20,12 @@ function toObjectIdOrNull(id) {
   }
 }
 
+function idCandidates(id) {
+  const str = String(id);
+  const oid = toObjectIdOrNull(str);
+  return oid ? [str, oid] : [str];
+}
+
 function sanitizeProfile(u) {
   const p = u?.profile ?? {};
   return {
@@ -106,14 +112,22 @@ export async function GET({ locals, url }) {
     .limit(50)
     .toArray();
 
+  const meIdCandidates = idCandidates(meIdStr);
   const pending = await friendReqCol
     .find({
       status: "pending",
-      $or: [{ fromUserId: meIdStr }, { toUserId: meIdStr }]
+      $or: [
+        { fromUserId: { $in: meIdCandidates } },
+        { toUserId: { $in: meIdCandidates } }
+      ]
     })
     .toArray();
-  const outgoing = new Set(pending.filter((p) => p.fromUserId === meIdStr).map((p) => p.toUserId));
-  const incoming = new Set(pending.filter((p) => p.toUserId === meIdStr).map((p) => p.fromUserId));
+  const outgoing = new Set(
+    pending.filter((p) => String(p.fromUserId) === meIdStr).map((p) => String(p.toUserId))
+  );
+  const incoming = new Set(
+    pending.filter((p) => String(p.toUserId) === meIdStr).map((p) => String(p.fromUserId))
+  );
 
   const results = raw
     .filter((u) => !demoIds.includes(String(u._id)))

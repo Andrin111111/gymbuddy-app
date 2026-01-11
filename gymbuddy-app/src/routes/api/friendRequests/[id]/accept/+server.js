@@ -22,15 +22,14 @@ export async function POST({ locals, params }) {
   const users = db.collection("users");
 
   const request = await col.findOne({ _id: oid });
-  if (!request || request.toUserId !== String(locals.userId) || request.status !== "pending") {
+  const toId = String(request?.toUserId ?? "");
+  const fromId = String(request?.fromUserId ?? "");
+  if (!request || toId !== String(locals.userId) || request.status !== "pending") {
     return json({ error: "not found" }, { status: 404 });
   }
 
   const now = new Date();
   await col.updateOne({ _id: oid }, { $set: { status: "accepted", updatedAt: now } });
-
-  const fromId = request.fromUserId;
-  const toId = request.toUserId;
 
   await Promise.all([
     users.updateOne({ _id: toObjectIdOrNull(fromId) ?? fromId }, { $addToSet: { friends: toId }, $pull: { friendRequestsOut: toId } }),
