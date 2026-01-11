@@ -23,8 +23,10 @@ export async function GET({ locals }) {
   const db = await getDb();
   const usersCol = db.collection("users");
 
+  const meIdStr = String(locals.userId);
+  const meId = toObjectIdOrNull(meIdStr) ?? meIdStr;
   const me = await usersCol.findOne(
-    { _id: String(locals.userId) },
+    { _id: meId },
     { projection: { friends: 1, name: 1, profile: 1, email: 1, buddyCode: 1, lifetimeXp: 1, xp: 1, seasonXp: 1 } }
   );
   if (!me) {
@@ -35,9 +37,9 @@ export async function GET({ locals }) {
     });
   }
 
-  await recomputeSeasonXp(locals.userId);
+  await recomputeSeasonXp(meIdStr);
 
-  const ids = [String(locals.userId), ...toIds(me.friends || [])];
+  const ids = [meIdStr, ...toIds(me.friends || [])];
   const seasonId = currentSeasonId();
 
   const queryIds = [

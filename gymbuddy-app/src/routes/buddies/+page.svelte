@@ -153,7 +153,7 @@
       const data = await parseJsonSafe(res);
       if (!res.ok) throw new Error(data?.error || `Anfrage konnte nicht gesendet werden (Status ${res.status}).`);
       await loadRequests();
-      await loadSearch();
+      await refreshSearchIfNeeded();
     } catch (e) {
       setError(e?.message || "Anfrage konnte nicht gesendet werden.");
     } finally {
@@ -172,7 +172,9 @@
       });
       const data = await parseJsonSafe(res);
       if (!res.ok) throw new Error(data?.error || `Anfrage konnte nicht angenommen werden (Status ${res.status}).`);
-      await Promise.all([loadRequests(), loadFriends(), loadSearch()]);
+      const tasks = [loadRequests(), loadFriends()];
+      if (hasSearched) tasks.push(loadSearch());
+      await Promise.all(tasks);
     } catch (e) {
       setError(e?.message || "Anfrage konnte nicht angenommen werden.");
     } finally {
@@ -191,7 +193,9 @@
       });
       const data = await parseJsonSafe(res);
       if (!res.ok) throw new Error(data?.error || `Anfrage konnte nicht abgelehnt werden (Status ${res.status}).`);
-      await Promise.all([loadRequests(), loadSearch()]);
+      const tasks = [loadRequests()];
+      if (hasSearched) tasks.push(loadSearch());
+      await Promise.all(tasks);
     } catch (e) {
       setError(e?.message || "Anfrage konnte nicht abgelehnt werden.");
     } finally {
@@ -210,7 +214,9 @@
       });
       const data = await parseJsonSafe(res);
       if (!res.ok) throw new Error(data?.error || "Anfrage konnte nicht zurückgezogen werden.");
-      await Promise.all([loadRequests(), loadSearch()]);
+      const tasks = [loadRequests()];
+      if (hasSearched) tasks.push(loadSearch());
+      await Promise.all(tasks);
     } catch (e) {
       setError(e?.message || "Anfrage konnte nicht zurückgezogen werden.");
     } finally {
@@ -230,7 +236,9 @@
       });
       const data = await parseJsonSafe(res);
       if (!res.ok) throw new Error(data?.error || `Freund konnte nicht entfernt werden (Status ${res.status}).`);
-      await Promise.all([loadFriends(), loadSearch()]);
+      const tasks = [loadFriends()];
+      if (hasSearched) tasks.push(loadSearch());
+      await Promise.all(tasks);
     } catch (e) {
       setError(e?.message || "Freund konnte nicht entfernt werden.");
     } finally {
@@ -250,7 +258,9 @@
       });
       const data = await parseJsonSafe(res);
       if (!res.ok) throw new Error(data?.error || `Blocken fehlgeschlagen (Status ${res.status}).`);
-      await Promise.all([loadBlocks(), loadFriends(), loadRequests(), loadSearch()]);
+      const tasks = [loadBlocks(), loadFriends(), loadRequests()];
+      if (hasSearched) tasks.push(loadSearch());
+      await Promise.all(tasks);
     } catch (e) {
       setError(e?.message || "Blocken fehlgeschlagen.");
     } finally {
@@ -266,11 +276,13 @@
       const res = await fetch("/api/blocks", {
         method: "POST",
         headers,
-        body: JSON.stringify({ targetUserId, action: "unblock" })
+        body: JSON.stringify({ targetUserId: targetId, action: "unblock" })
       });
       const data = await parseJsonSafe(res);
       if (!res.ok) throw new Error(data?.error || `Entsperren fehlgeschlagen (Status ${res.status}).`);
-      await Promise.all([loadBlocks(), loadSearch()]);
+      const tasks = [loadBlocks()];
+      if (hasSearched) tasks.push(loadSearch());
+      await Promise.all(tasks);
     } catch (e) {
       setError(e?.message || "Entsperren fehlgeschlagen.");
     } finally {
@@ -284,6 +296,11 @@
 
   function isBlocked(userId) {
     return blocks.some((b) => String(b._id) === String(userId));
+  }
+
+  async function refreshSearchIfNeeded() {
+    if (!hasSearched) return;
+    await loadSearch();
   }
 
   async function loadAll() {

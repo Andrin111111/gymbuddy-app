@@ -86,7 +86,10 @@
 
   function resolveName(id, fallback = "") {
     if (!id) return fallback;
-    return DEMO_NAME_MAP[id] || id;
+    const raw = String(id);
+    if (DEMO_NAME_MAP[raw]) return DEMO_NAME_MAP[raw];
+    if (/^[a-f0-9]{24}$/i.test(raw)) return fallback;
+    return raw;
   }
 
   function notificationTitle(n) {
@@ -95,18 +98,21 @@
 
   function notificationBody(n) {
     const p = n?.payload || {};
-    if (n.type === "friend_request_received" && p.byUserId) return `Von ${resolveName(p.byUserId, "Buddy")}`;
-    if (n.type === "friend_request_accepted" && p.byUserId) return `${resolveName(p.byUserId, "Buddy")} hat angenommen`;
+    if (n.type === "friend_request_received") {
+      const fromId = p.fromUserId || p.byUserId;
+      return fromId ? `Von ${resolveName(fromId, "Buddy")}` : "Neue Anfrage erhalten.";
+    }
+    if (n.type === "friend_request_accepted" && p.byUserId) {
+      return `${resolveName(p.byUserId, "Buddy")} hat angenommen`;
+    }
     if (n.type === "achievement_unlocked" && p.key) {
       const a = achievements.find((x) => x.key === p.key);
-      return a ? `${a.title} - ${a.description || ""}` : `Achievement: ${p.key}`;
+      return a ? `${a.name} - ${a.description || ""}` : `Achievement: ${p.key}`;
     }
+    if (p.message) return String(p.message);
+    if (p.text) return String(p.text);
     if (Object.keys(p).length === 0) return "Keine weiteren Details.";
-    try {
-      return JSON.stringify(p);
-    } catch {
-      return String(p);
-    }
+    return "Details verfuegbar.";
   }
 
   function achievementIcon(key) {
